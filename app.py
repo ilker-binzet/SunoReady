@@ -30,8 +30,8 @@ class SunoReadyApp:
         
         # Initialize utilities
         self.audio_processor = AudioProcessor()
-        self.yt_downloader = YouTubeDownloader()
-        self.metadata_utils = MetadataUtils()
+        self.yt_downloader = YouTubeDownloader(log_callback=self.log_to_terminal)
+        self.metadata_utils = MetadataUtils(log_callback=self.log_to_terminal)
         
         # Load configuration
         self.config = self.load_config()
@@ -70,6 +70,56 @@ class SunoReadyApp:
             config = self.config
         with open("config.json", "w") as f:
             json.dump(config, indent=2, fp=f)
+    
+    def paste_from_clipboard(self):
+        """Paste text from clipboard to YouTube input field"""
+        try:
+            # Get text from clipboard
+            clipboard_text = self.root.clipboard_get()
+            
+            # Clear current input and insert clipboard text
+            self.yt_input.delete(0, 'end')
+            self.yt_input.insert(0, clipboard_text.strip())
+            
+            # Log the action
+            self.log_to_terminal(f"📋 Pasted from clipboard: {clipboard_text[:50]}...", "info")
+            
+        except tk.TclError:
+            # Clipboard is empty or contains non-text data
+            messagebox.showwarning("Clipboard Error", "Clipboard is empty or contains non-text data.")
+            self.log_to_terminal("❌ Clipboard paste failed - no text data", "warning")
+        except Exception as e:
+            messagebox.showerror("Paste Error", f"Failed to paste from clipboard: {str(e)}")
+            self.log_to_terminal(f"❌ Clipboard paste error: {str(e)}", "error")
+    
+    def on_quality_change(self, selected_quality):
+        """Called when quality dropdown changes"""
+        # Auto-uncheck the default checkbox when quality changes
+        self.set_default_var.set(False)
+        
+        # Log quality change
+        self.log_to_terminal(f"🎵 Quality changed to: {selected_quality} kbps", "info")
+    
+    def save_default_quality(self):
+        """Save current quality as default when checkbox is checked"""
+        if self.set_default_var.get():
+            current_quality = self.quality_var.get()
+            
+            # Update config
+            self.config["youtube_quality"] = current_quality
+            self.save_config()
+            
+            # Show confirmation
+            self.log_to_terminal(f"📌 Default quality set to: {current_quality} kbps", "success")
+            messagebox.showinfo(
+                "Default Quality Set", 
+                f"Audio quality {current_quality} kbps has been set as default.\n\nThis will be used for all future downloads."
+            )
+            
+            # Uncheck after saving
+            self.root.after(1000, lambda: self.set_default_var.set(False))
+        else:
+            self.log_to_terminal("📌 Default quality setting cancelled", "info")
     
     def setup_ui(self):
         """Setup the main user interface"""
@@ -185,65 +235,198 @@ class SunoReadyApp:
         self.process_btn.pack(pady=20)
     
     def setup_youtube_tab(self):
-        """Setup YouTube downloader tab"""
+        """Setup YouTube downloader tab with sub-tabs"""
         yt_tab = self.notebook.add("YouTube Downloader")
         
-        # Search section
-        search_frame = ctk.CTkFrame(yt_tab)
-        search_frame.pack(fill="x", padx=20, pady=20)
+        # Create a notebook for YouTube sub-tabs
+        self.yt_notebook = ctk.CTkTabview(yt_tab)
+        self.yt_notebook.pack(fill="both", expand=True, padx=20, pady=20)
         
-        ctk.CTkLabel(search_frame, text="YouTube Search & Download", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        # Create Download tab
+        self.setup_download_tab()
         
-        # URL/Search input
-        input_frame = ctk.CTkFrame(search_frame)
+        # Create Terminal tab
+        self.setup_terminal_tab()
+        
+        # Initialize loading animation variables
+        self.loading_animation_active = False
+        
+    def setup_download_tab(self):
+        """Setup the download tab within YouTube section"""
+        download_tab = self.yt_notebook.add("İndirme")
+        
+        # Download section
+        download_frame = ctk.CTkFrame(download_tab)
+        download_frame.pack(fill="x", padx=20, pady=20)
+        
+        ctk.CTkLabel(download_frame, text="YouTube Audio Downloader", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        
+        # URL input
+        input_frame = ctk.CTkFrame(download_frame)
         input_frame.pack(fill="x", padx=20, pady=10)
         
-        ctk.CTkLabel(input_frame, text="YouTube URL or Search Query:").pack(anchor="w", padx=10, pady=(10, 5))
-        self.yt_input = ctk.CTkEntry(input_frame, placeholder_text="Enter YouTube URL or search terms...")
-        self.yt_input.pack(fill="x", padx=10, pady=(0, 10))
+        ctk.CTkLabel(input_frame, text="YouTube URL:").pack(anchor="w", padx=10, pady=(10, 5))
         
-        # Search and download buttons
-        button_frame = ctk.CTkFrame(search_frame)
+        # Input and paste button row
+        input_row = ctk.CTkFrame(input_frame)
+        input_row.pack(fill="x", padx=10, pady=(0, 10))
+        
+        self.yt_input = ctk.CTkEntry(input_row, placeholder_text="Paste YouTube URL here...")
+        self.yt_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        # Paste from clipboard button
+        ctk.CTkButton(
+            input_row,
+            text="📋 Paste",
+            command=self.paste_from_clipboard,
+            width=80,
+            height=32,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#0095af",
+            hover_color="#006b66"
+        ).pack(side="right")
+        
+        # Quality selection
+        quality_frame = ctk.CTkFrame(input_frame)
+        quality_frame.pack(fill="x", padx=10, pady=(0, 10))
+        
+        ctk.CTkLabel(quality_frame, text="Audio Quality (kbps):").pack(side="left", padx=(0, 10))
+        
+        # Get default quality from config
+        default_quality = self.config.get("youtube_quality", "192")
+        self.quality_var = ctk.StringVar(value=default_quality)
+        self.quality_dropdown = ctk.CTkOptionMenu(
+            quality_frame,
+            values=["64", "128", "192", "256", "320"],
+            variable=self.quality_var,
+            width=100,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            dropdown_font=ctk.CTkFont(size=11),
+            command=self.on_quality_change
+        )
+        self.quality_dropdown.pack(side="left", padx=(0, 15))
+        
+        # Set as default checkbox
+        self.set_default_var = ctk.BooleanVar()
+        self.default_checkbox = ctk.CTkCheckBox(
+            quality_frame,
+            text="📌 Set as Default",
+            variable=self.set_default_var,
+            font=ctk.CTkFont(size=11),
+            text_color="#94a3b8",
+            hover_color="#0ea5e9",
+            command=self.save_default_quality
+        )
+        self.default_checkbox.pack(side="left")
+        
+        # Download button (centered)
+        button_frame = ctk.CTkFrame(download_frame)
         button_frame.pack(fill="x", padx=20, pady=10)
         
         ctk.CTkButton(
             button_frame, 
-            text="Search", 
-            command=self.search_youtube,
-            width=120
-        ).pack(side="left", padx=(0, 10))
-        
-        ctk.CTkButton(
-            button_frame, 
-            text="Download", 
+            text="⬇️ Download Audio", 
             command=self.download_youtube,
-            width=120
+            width=200,
+            height=40,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#50fa7b",
+            hover_color="#6de876"
+        ).pack(pady=10)
+        
+        # Download status section - Modern and clean design
+        status_frame = ctk.CTkFrame(download_tab, fg_color="transparent")
+        status_frame.pack(fill="both", expand=True, padx=20, pady=(10, 20))
+        
+        # Status header with icon
+        status_header = ctk.CTkFrame(status_frame, fg_color="#2d3748", corner_radius=8)
+        status_header.pack(fill="x", pady=(0, 10))
+        
+        header_content = ctk.CTkFrame(status_header, fg_color="transparent")
+        header_content.pack(fill="x", padx=15, pady=10)
+        
+        # Status icon and title
+        ctk.CTkLabel(
+            header_content, 
+            text="📥 Download Status", 
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color="#e2e8f0"
         ).pack(side="left")
         
-        # Search results
-        results_frame = ctk.CTkFrame(yt_tab)
-        results_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
-        
-        results_header = ctk.CTkFrame(results_frame)
-        results_header.pack(fill="x", padx=20, pady=(10, 5))
-        
-        self.results_label = ctk.CTkLabel(results_header, text="Search Results", font=ctk.CTkFont(size=14, weight="bold"))
-        self.results_label.pack(side="left")
-        
-        # Loading animation
-        self.loading_label = ctk.CTkLabel(results_header, text="", font=ctk.CTkFont(size=12))
+        # Loading animation (right side)
+        self.loading_label = ctk.CTkLabel(
+            header_content, 
+            text="", 
+            font=ctk.CTkFont(size=11),
+            text_color="#94a3b8"
+        )
         self.loading_label.pack(side="right")
         
-        # Progress bar for search
-        self.search_progress = ctk.CTkProgressBar(results_frame)
-        self.search_progress.pack(fill="x", padx=20, pady=(0, 5))
-        self.search_progress.set(0)
+        # Progress bar - sleek design
+        progress_container = ctk.CTkFrame(status_frame, fg_color="transparent")
+        progress_container.pack(fill="x", pady=(0, 10))
         
-        self.results_text = ctk.CTkTextbox(results_frame, height=200)
-        self.results_text.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        self.download_progress = ctk.CTkProgressBar(
+            progress_container,
+            height=8,
+            corner_radius=4,
+            progress_color="#10b981",
+            fg_color="#374151"
+        )
+        self.download_progress.pack(fill="x", padx=5)
+        self.download_progress.set(0)
         
-        # Initialize loading animation variables
-        self.loading_animation_active = False
+        # Status display - compact and modern
+        self.status_text = ctk.CTkTextbox(
+            status_frame, 
+            height=120,
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            corner_radius=8,
+            fg_color="#1e293b",
+            text_color="#f1f5f9",
+            scrollbar_button_color="#475569",
+            scrollbar_button_hover_color="#64748b"
+        )
+        self.status_text.pack(fill="both", expand=True)
+        self.status_text.insert("1.0", "✨ Ready to download\n\nPaste a YouTube URL above and click Download Audio to get started.")
+        
+    def setup_terminal_tab(self):
+        """Setup the terminal tab within YouTube section"""
+        terminal_tab = self.yt_notebook.add("Terminal")
+        
+        # Terminal header
+        terminal_header = ctk.CTkFrame(terminal_tab, fg_color="#313244")
+        terminal_header.pack(fill="x", padx=20, pady=(20, 0))
+        
+        ctk.CTkLabel(
+            terminal_header, 
+            text="🖥️ yt-dlp Console", 
+            font=ctk.CTkFont(size=14, weight="bold"), 
+            text_color="#cdd6f4"
+        ).pack(side="left", padx=15, pady=10)
+        
+        # Clear terminal button
+        ctk.CTkButton(
+            terminal_header, 
+            text="🗑️ Clear", 
+            command=self.clear_terminal,
+            width=80,
+            height=30,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#f38ba8",
+            hover_color="#f2d5cf"
+        ).pack(side="right", padx=15, pady=5)
+        
+        # Terminal console with Dracula theme colors
+        self.terminal_text = ctk.CTkTextbox(
+            terminal_tab, 
+            font=ctk.CTkFont(family="Consolas", size=11),
+            text_color="#f8f8f2",  # Dracula foreground
+            fg_color="#282a36",    # Dracula background
+            scrollbar_button_color="#44475a",  # Dracula selection
+            scrollbar_button_hover_color="#6272a4"  # Dracula comment
+        )
+        self.terminal_text.pack(fill="both", expand=True, padx=20, pady=(5, 20))
         self.loading_dots = 0
     
     def setup_status_section(self, parent):
@@ -304,10 +487,7 @@ class SunoReadyApp:
         self.progress.set(value)
         self.root.update_idletasks()
     
-    def update_search_progress(self, value):
-        """Update search progress bar"""
-        self.search_progress.set(value)
-        self.root.update_idletasks()
+
     
     def start_loading_animation(self, text="Loading"):
         """Start the loading animation"""
@@ -319,7 +499,6 @@ class SunoReadyApp:
         """Stop the loading animation"""
         self.loading_animation_active = False
         self.loading_label.configure(text="")
-        self.search_progress.set(0)
     
     def _animate_loading(self, base_text):
         """Animate loading dots"""
@@ -398,68 +577,6 @@ class SunoReadyApp:
             self.process_btn.configure(state="normal")
             self.update_progress(0)
     
-    def search_youtube(self):
-        """Search YouTube for videos"""
-        query = self.yt_input.get().strip()
-        if not query:
-            messagebox.showwarning("No Query", "Please enter a search query or YouTube URL.")
-            return
-        
-        # Start loading animation
-        self.start_loading_animation("Searching YouTube")
-        self.update_status("Searching YouTube...")
-        
-        # Clear previous results
-        self.results_text.delete("1.0", "end")
-        self.results_text.insert("1.0", "Searching for videos...")
-        
-        # Start search in separate thread
-        thread = threading.Thread(target=self._search_youtube_thread, args=(query,))
-        thread.daemon = True
-        thread.start()
-    
-    def _search_youtube_thread(self, query):
-        """Search YouTube in separate thread"""
-        try:
-            # Simulate search progress
-            self.update_search_progress(0.2)
-            self.root.after(100, lambda: self.update_search_progress(0.4))
-            
-            results = self.yt_downloader.search_youtube(query)
-            
-            self.update_search_progress(0.8)
-            
-            # Update results display with animation
-            self.results_text.delete("1.0", "end")
-            if results:
-                # Add results with smooth reveal
-                for i, result in enumerate(results[:10], 1):  # Show top 10 results
-                    # Animate each result appearing
-                    self.root.after(i * 50, lambda idx=i, res=result: self._add_result_with_animation(idx, res))
-            else:
-                self.results_text.insert("1.0", "No results found.")
-            
-            # Complete the loading animation
-            self.root.after(600, lambda: [
-                self.update_search_progress(1.0),
-                self.stop_loading_animation(),
-                self.update_status("Search completed")
-            ])
-            
-        except Exception as e:
-            self.stop_loading_animation()
-            self.update_search_progress(0)
-            self.update_status("Search failed")
-            self.results_text.delete("1.0", "end")
-            self.results_text.insert("1.0", f"Search failed: {str(e)}")
-    
-    def _add_result_with_animation(self, index, result):
-        """Add search result with animation"""
-        self.results_text.insert("end", f"{index}. {result['title']}\n")
-        self.results_text.insert("end", f"   Duration: {result['duration']} | Views: {result['views']}\n")
-        self.results_text.insert("end", f"   URL: {result['url']}\n\n")
-        self.results_text.see("end")
-    
     def download_youtube(self):
         """Download YouTube video as MP3"""
         url = self.yt_input.get().strip()
@@ -467,13 +584,20 @@ class SunoReadyApp:
             messagebox.showwarning("No URL", "Please enter a YouTube URL.")
             return
         
+        # Get selected quality
+        selected_quality = self.quality_var.get()
+        
         # Start loading animation for download
         self.start_loading_animation("Downloading")
         self.update_status("Downloading from YouTube...")
         
         # Show download progress
-        self.search_progress.pack(fill="x", padx=20, pady=(0, 5))
-        self.update_search_progress(0.1)
+        self.download_progress.pack(fill="x", padx=20, pady=(0, 5))
+        self.update_download_progress(0.1)
+        
+        # Update status display
+        self.status_text.delete("1.0", "end")
+        self.status_text.insert("1.0", f"🚀 Starting download...\n\n🔗 URL: {url}\n📊 Quality: {selected_quality} kbps\n\n⏳ Please wait...")
         
         # Start download in separate thread
         thread = threading.Thread(target=self._download_youtube_thread, args=(url,))
@@ -483,24 +607,125 @@ class SunoReadyApp:
     def _download_youtube_thread(self, url):
         """Download YouTube video in separate thread"""
         try:
-            output_path = self.yt_downloader.download_audio(url)
+            self.log_to_terminal("=" * 50, "info")
+            self.log_to_terminal("🎵 SunoReady - YouTube Downloader", "info")
+            self.log_to_terminal("=" * 50, "info")
+            
+            # Get selected quality
+            selected_quality = self.quality_var.get()
+            self.log_to_terminal(f"🎵 Audio quality: {selected_quality} kbps", "info")
+            
+            # Update status display with modern styling
+            self.status_text.delete("1.0", "end")
+            self.status_text.insert("1.0", f"⚡ Processing download...\n\n📊 Quality: {selected_quality} kbps\n🎥 Extracting video information...\n\n⏳ This may take a moment...")
+            
+            # Simulate download progress steps
+            self.update_download_progress(0.3)
+            self.root.after(500, lambda: self.update_download_progress(0.6))
+            
+            output_path = self.yt_downloader.download_audio(url, quality=selected_quality)
+            
+            self.update_download_progress(0.9)
             
             if output_path:
-                # Clean metadata
+                # Clean metadata with progress indication
+                self.log_to_terminal("Cleaning metadata...", "info")
+                self.root.after(200, lambda: self.loading_label.configure(text="Cleaning metadata..."))
+                self.status_text.insert("end", "\n\n🧹 Cleaning metadata...")
                 self.metadata_utils.clean_metadata(output_path)
+                self.log_to_terminal("Metadata cleaned successfully!", "success")
                 
-                self.update_status("Download completed successfully!")
-                messagebox.showinfo("Success", f"Downloaded to: {output_path}")
+                # Complete the animation
+                self.root.after(300, lambda: [
+                    self.update_download_progress(1.0),
+                    self.stop_loading_animation(),
+                    self.update_status("Download completed successfully!"),
+                    self.log_to_terminal("✅ Download process completed!", "success"),
+                    self.status_text.delete("1.0", "end"),
+                    self.status_text.insert("1.0", f"✅ Download completed successfully!\n\n📁 File saved to:\n{output_path}\n\n🎉 Ready for your next download!"),
+                    messagebox.showinfo("Success", f"Downloaded to: {output_path}")
+                ])
             else:
+                self.stop_loading_animation()
+                self.update_download_progress(0)
                 self.update_status("Download failed")
+                self.log_to_terminal("❌ Download failed - file not found", "error")
+                self.status_text.delete("1.0", "end")
+                self.status_text.insert("1.0", "❌ Download failed - file not found\n\n🔍 Please check the URL and try again.\n💡 Make sure the video is public and accessible.")
                 messagebox.showerror("Error", "Failed to download the video.")
                 
         except Exception as e:
+            self.stop_loading_animation()
+            self.update_download_progress(0)
             self.update_status("Download failed")
+            self.log_to_terminal(f"❌ Download failed: {str(e)}", "error")
+            self.status_text.delete("1.0", "end")
+            self.status_text.insert("1.0", f"❌ Download failed!\n\n🚨 Error: {str(e)}\n\n💡 Please check the URL and try again.\n🔧 If issue persists, check your internet connection.")
             messagebox.showerror("Download Error", f"Failed to download: {str(e)}")
     
+    def update_download_progress(self, value):
+        """Update download progress bar"""
+        if hasattr(self, 'download_progress'):
+            self.download_progress.set(value)
+            self.root.update_idletasks()
+    
+    def clear_terminal(self):
+        """Clear terminal console"""
+        self.terminal_text.delete("1.0", "end")
+        self.log_to_terminal("Terminal cleared.", "info")
+    
+    def log_to_terminal(self, message, msg_type="normal"):
+        """Log message to terminal with color coding"""
+        timestamp = threading.current_thread().name
+        
+        # Color coding based on message type
+        if msg_type == "info":
+            color = "#8be9fd"  # Dracula cyan
+            prefix = "[INFO]"
+        elif msg_type == "warning":
+            color = "#ffb86c"  # Dracula orange  
+            prefix = "[WARN]"
+        elif msg_type == "error":
+            color = "#ff5555"  # Dracula red
+            prefix = "[ERROR]"
+        elif msg_type == "success":
+            color = "#50fa7b"  # Dracula green
+            prefix = "[SUCCESS]"
+        elif msg_type == "youtube":
+            color = "#ff79c6"  # Dracula pink
+            prefix = "[YOUTUBE]"
+        elif msg_type == "download":
+            color = "#bd93f9"  # Dracula purple
+            prefix = "[DOWNLOAD]"
+        else:
+            color = "#f8f8f2"  # Dracula foreground
+            prefix = ""
+        
+        # Insert message with timestamp
+        current_time = threading.current_thread().name if hasattr(threading.current_thread(), 'name') else "Main"
+        
+        # Check if terminal exists and add message
+        if hasattr(self, 'terminal_text'):
+            self.terminal_text.insert("end", f"{prefix} {message}\n")
+            self.terminal_text.see("end")
+            
+            # Auto-switch to terminal tab for important messages
+            if msg_type in ["error", "download", "youtube"] and hasattr(self, 'yt_notebook'):
+                try:
+                    self.yt_notebook.set("Terminal")
+                except:
+                    pass  # Ignore if tab switching fails
+                    
+            self.root.update_idletasks()
+
     def run(self):
         """Start the application"""
+        # Add startup logs to terminal
+        self.log_to_terminal("🎵 SunoReady - Audio Processing Tool", "info")
+        self.log_to_terminal("Ready for audio processing and YouTube downloads.", "info")
+        self.log_to_terminal("Terminal tab shows processing logs in real-time.", "info")
+        self.log_to_terminal("=" * 50, "info")
+        
         self.root.mainloop()
 
 def main():

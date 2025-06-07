@@ -10,9 +10,33 @@ import re
 from pathlib import Path
 
 class YouTubeDownloader:
-    def __init__(self):
+    def __init__(self, log_callback=None):
         self.output_dir = "output"
         os.makedirs(self.output_dir, exist_ok=True)
+        self.log_callback = log_callback
+    
+    def log(self, message, msg_type="normal"):
+        """Log message to callback if available"""
+        if self.log_callback:
+            self.log_callback(message, msg_type)
+        else:
+            print(f"[{msg_type.upper()}] {message}")
+    
+    def progress_hook(self, d):
+        """Progress callback for yt-dlp"""
+        if d['status'] == 'downloading':
+            if 'total_bytes' in d:
+                percent = (d['downloaded_bytes'] / d['total_bytes']) * 100
+                self.log(f"Downloading... {percent:.1f}% ({d['downloaded_bytes']}/{d['total_bytes']} bytes)", "download")
+            elif 'total_bytes_estimate' in d:
+                percent = (d['downloaded_bytes'] / d['total_bytes_estimate']) * 100
+                self.log(f"Downloading... ~{percent:.1f}% ({d['downloaded_bytes']}/?? bytes)", "download")
+            else:
+                self.log(f"Downloading... {d['downloaded_bytes']} bytes", "download")
+        elif d['status'] == 'finished':
+            self.log(f"Download completed: {d['filename']}", "success")
+        elif d['status'] == 'error':
+            self.log(f"Download error: {d.get('error', 'Unknown error')}", "error")
     
     def search_youtube(self, query, limit=10):
         """
@@ -64,30 +88,34 @@ class YouTubeDownloader:
         )
         return youtube_regex.match(url) is not None
     
-    def download_audio(self, url, output_format='mp3', quality='best'):
+    def download_audio(self, url, output_format='mp3', quality='192'):
         """
         Download audio from YouTube URL
         
         Args:
             url (str): YouTube URL
             output_format (str): Output format (mp3, wav, etc.)
-            quality (str): Audio quality ('best', 'worst', or specific)
+            quality (str): Audio quality in kbps ('64', '128', '192', '256', '320')
             
         Returns:
             str: Path to downloaded file or None if failed
         """
         try:
+            self.log("Starting download process...", "info")
+            self.log(f"URL: {url}", "youtube")
+            self.log(f"Audio quality: {quality} kbps", "info")
+            
             # Configure yt-dlp options
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': os.path.join(self.output_dir, '%(title)s.%(ext)s'),
                 'extractaudio': True,
                 'audioformat': output_format,
-                'audioquality': '320K',  # High quality
+                'audioquality': f'{quality}K',  # Use selected quality
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': output_format,
-                    'preferredquality': '320',
+                    'preferredquality': quality,  # Use selected quality
                 }],
                 'postprocessor_args': [
                     '-ar', '44100',  # Sample rate
@@ -96,19 +124,30 @@ class YouTubeDownloader:
                 'keepvideo': False,
                 'no_warnings': False,
                 'quiet': False,
+                'progress_hooks': [self.progress_hook],
             }
             
             # Download the audio
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                self.log("Extracting video information...", "youtube")
+                
                 # Extract info first to get the title
                 info = ydl.extract_info(url, download=False)
                 title = info.get('title', 'Unknown')
+                duration = info.get('duration', 0)
+                uploader = info.get('uploader', 'Unknown')
+                
+                self.log(f"Title: {title}", "info")
+                self.log(f"Duration: {duration//60}:{duration%60:02d}", "info")
+                self.log(f"Uploader: {uploader}", "info")
                 
                 # Clean title for filename
                 clean_title = self._clean_filename(title)
                 
                 # Update output template with clean title
                 ydl_opts['outtmpl'] = os.path.join(self.output_dir, f'{clean_title}.%(ext)s')
+                
+                self.log("Starting download...", "download")
                 
                 # Create new YoutubeDL instance with updated options
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl_download:
@@ -118,16 +157,21 @@ class YouTubeDownloader:
                 expected_filename = os.path.join(self.output_dir, f'{clean_title}.{output_format}')
                 
                 if os.path.exists(expected_filename):
+                    self.log(f"Successfully downloaded: {expected_filename}", "success")
                     return expected_filename
                 else:
                     # Try to find any new file in output directory
                     for file in os.listdir(self.output_dir):
                         if file.endswith(f'.{output_format}') and clean_title in file:
-                            return os.path.join(self.output_dir, file)
+                            full_path = os.path.join(self.output_dir, file)
+                            self.log(f"Successfully downloaded: {full_path}", "success")
+                            return full_path
                     
+                    self.log("Download completed but file not found!", "error")
                     return None
                     
         except Exception as e:
+            self.log(f"Download failed: {str(e)}", "error")
             raise Exception(f"Failed to download audio from YouTube: {str(e)}")
     
     def _clean_filename(self, filename):

@@ -1,0 +1,9 @@
+customtkinter>=5.2.0
+librosa>=0.10.0
+soundfile>=0.12.0
+numpy>=1.24.0
+scipy>=1.11.0
+mutagen>=1.47.0
+yt-dlp>=2023.7.6
+youtube-search-python>=1.6.6
+requests>=2.31.0

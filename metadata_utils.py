@@ -14,8 +14,16 @@ import subprocess
 from pathlib import Path
 
 class MetadataUtils:
-    def __init__(self):
+    def __init__(self, log_callback=None):
         self.supported_formats = ['.mp3', '.flac', '.m4a', '.ogg', '.wav']
+        self.log_callback = log_callback
+    
+    def log(self, message, msg_type="normal"):
+        """Log message to callback if available"""
+        if self.log_callback:
+            self.log_callback(message, msg_type)
+        else:
+            print(f"[{msg_type.upper()}] {message}")
     
     def clean_metadata(self, file_path):
         """

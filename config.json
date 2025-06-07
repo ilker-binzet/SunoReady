@@ -1,16 +1,15 @@
 {
-  "pitch_shift": 0,
-  "tempo_change": 100,
-  "trim_duration": 90,
+  "pitch_shift": 2.0,
+  "tempo_change": 85.0,
+  "trim_duration": 90.0,
   "normalize_volume": true,
-  "add_noise": false,
-  "apply_highpass": false,
+  "add_noise": true,
+  "apply_highpass": true,
   "output_format": "mp3",
   "default_output_quality": "320k",
   "ui_theme": "dark",
   "auto_clean_metadata": true,
   "batch_processing": true,
   "ffmpeg_path": "ffmpeg",
-  "youtube_quality": "best",
-  "search_results_limit": 10
+  "youtube_quality": "64"
 }
