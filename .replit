@@ -1,0 +1,28 @@
+modules = ["python-3.11"]
+
+[nix]
+channel = "stable-24_05"
+packages = ["ffmpeg-full", "libsndfile", "libxcrypt", "pkg-config", "xsimd"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "SunoReady App"
+
+[[workflows.workflow]]
+name = "SunoReady App"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pip install customtkinter librosa soundfile scipy yt-dlp youtube-search-python mutagen && python app.py"
+
+[deployment]
+run = ["sh", "-c", "pip install customtkinter librosa soundfile scipy yt-dlp youtube-search-python mutagen && python app.py"]
