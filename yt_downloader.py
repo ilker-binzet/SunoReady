@@ -30,9 +30,15 @@ class YouTubeDownloader:
             if self._is_youtube_url(query):
                 return [{"title": "Direct URL", "url": query, "duration": "Unknown", "views": "Unknown"}]
             
-            # Search YouTube
-            videos_search = VideosSearch(query, limit=limit)
-            results = videos_search.result()
+            # Search YouTube with error handling for compatibility
+            try:
+                videos_search = VideosSearch(query, limit=limit)
+                results = videos_search.result()
+            except TypeError:
+                # Fallback for compatibility issues
+                import requests
+                search_url = f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}"
+                return [{"title": f"Search: {query}", "url": search_url, "duration": "Unknown", "views": "Unknown"}]
             
             formatted_results = []
             for video in results['result']:
@@ -47,7 +53,8 @@ class YouTubeDownloader:
             return formatted_results
             
         except Exception as e:
-            raise Exception(f"Failed to search YouTube: {str(e)}")
+            # Return a fallback result instead of failing completely
+            return [{"title": f"Search: {query}", "url": f"https://www.youtube.com/results?search_query={query.replace(' ', '+')}", "duration": "Unknown", "views": "Unknown"}]
     
     def _is_youtube_url(self, url):
         """Check if string is a valid YouTube URL"""

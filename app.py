@@ -224,10 +224,27 @@ class SunoReadyApp:
         results_frame = ctk.CTkFrame(yt_tab)
         results_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
         
-        ctk.CTkLabel(results_frame, text="Search Results", font=ctk.CTkFont(size=14, weight="bold")).pack(pady=(10, 5))
+        results_header = ctk.CTkFrame(results_frame)
+        results_header.pack(fill="x", padx=20, pady=(10, 5))
+        
+        self.results_label = ctk.CTkLabel(results_header, text="Search Results", font=ctk.CTkFont(size=14, weight="bold"))
+        self.results_label.pack(side="left")
+        
+        # Loading animation
+        self.loading_label = ctk.CTkLabel(results_header, text="", font=ctk.CTkFont(size=12))
+        self.loading_label.pack(side="right")
+        
+        # Progress bar for search
+        self.search_progress = ctk.CTkProgressBar(results_frame)
+        self.search_progress.pack(fill="x", padx=20, pady=(0, 5))
+        self.search_progress.set(0)
         
         self.results_text = ctk.CTkTextbox(results_frame, height=200)
         self.results_text.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        
+        # Initialize loading animation variables
+        self.loading_animation_active = False
+        self.loading_dots = 0
     
     def setup_status_section(self, parent):
         """Setup status and progress section"""
@@ -286,6 +303,35 @@ class SunoReadyApp:
         """Update progress bar"""
         self.progress.set(value)
         self.root.update_idletasks()
+    
+    def update_search_progress(self, value):
+        """Update search progress bar"""
+        self.search_progress.set(value)
+        self.root.update_idletasks()
+    
+    def start_loading_animation(self, text="Loading"):
+        """Start the loading animation"""
+        self.loading_animation_active = True
+        self.loading_dots = 0
+        self._animate_loading(text)
+    
+    def stop_loading_animation(self):
+        """Stop the loading animation"""
+        self.loading_animation_active = False
+        self.loading_label.configure(text="")
+        self.search_progress.set(0)
+    
+    def _animate_loading(self, base_text):
+        """Animate loading dots"""
+        if not self.loading_animation_active:
+            return
+        
+        dots = "." * (self.loading_dots % 4)
+        self.loading_label.configure(text=f"{base_text}{dots}")
+        self.loading_dots += 1
+        
+        # Schedule next animation frame
+        self.root.after(300, lambda: self._animate_loading(base_text))
     
     def process_audio_files(self):
         """Process selected audio files"""
@@ -359,7 +405,13 @@ class SunoReadyApp:
             messagebox.showwarning("No Query", "Please enter a search query or YouTube URL.")
             return
         
+        # Start loading animation
+        self.start_loading_animation("Searching YouTube")
         self.update_status("Searching YouTube...")
+        
+        # Clear previous results
+        self.results_text.delete("1.0", "end")
+        self.results_text.insert("1.0", "Searching for videos...")
         
         # Start search in separate thread
         thread = threading.Thread(target=self._search_youtube_thread, args=(query,))
@@ -369,23 +421,44 @@ class SunoReadyApp:
     def _search_youtube_thread(self, query):
         """Search YouTube in separate thread"""
         try:
+            # Simulate search progress
+            self.update_search_progress(0.2)
+            self.root.after(100, lambda: self.update_search_progress(0.4))
+            
             results = self.yt_downloader.search_youtube(query)
             
-            # Update results display
+            self.update_search_progress(0.8)
+            
+            # Update results display with animation
             self.results_text.delete("1.0", "end")
             if results:
+                # Add results with smooth reveal
                 for i, result in enumerate(results[:10], 1):  # Show top 10 results
-                    self.results_text.insert("end", f"{i}. {result['title']}\n")
-                    self.results_text.insert("end", f"   Duration: {result['duration']} | Views: {result['views']}\n")
-                    self.results_text.insert("end", f"   URL: {result['url']}\n\n")
+                    # Animate each result appearing
+                    self.root.after(i * 50, lambda idx=i, res=result: self._add_result_with_animation(idx, res))
             else:
                 self.results_text.insert("1.0", "No results found.")
             
-            self.update_status("Search completed")
+            # Complete the loading animation
+            self.root.after(600, lambda: [
+                self.update_search_progress(1.0),
+                self.stop_loading_animation(),
+                self.update_status("Search completed")
+            ])
             
         except Exception as e:
+            self.stop_loading_animation()
+            self.update_search_progress(0)
             self.update_status("Search failed")
-            messagebox.showerror("Search Error", f"Failed to search YouTube: {str(e)}")
+            self.results_text.delete("1.0", "end")
+            self.results_text.insert("1.0", f"Search failed: {str(e)}")
+    
+    def _add_result_with_animation(self, index, result):
+        """Add search result with animation"""
+        self.results_text.insert("end", f"{index}. {result['title']}\n")
+        self.results_text.insert("end", f"   Duration: {result['duration']} | Views: {result['views']}\n")
+        self.results_text.insert("end", f"   URL: {result['url']}\n\n")
+        self.results_text.see("end")
     
     def download_youtube(self):
         """Download YouTube video as MP3"""
@@ -394,7 +467,13 @@ class SunoReadyApp:
             messagebox.showwarning("No URL", "Please enter a YouTube URL.")
             return
         
+        # Start loading animation for download
+        self.start_loading_animation("Downloading")
         self.update_status("Downloading from YouTube...")
+        
+        # Show download progress
+        self.search_progress.pack(fill="x", padx=20, pady=(0, 5))
+        self.update_search_progress(0.1)
         
         # Start download in separate thread
         thread = threading.Thread(target=self._download_youtube_thread, args=(url,))
