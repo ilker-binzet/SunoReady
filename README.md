@@ -4,11 +4,31 @@ Ses dosyalarını işlemek için geliştirilmiş Python GUI uygulaması.
 
 ## 🎯 Özellikler
 
-- **Ses İşleme**: Pitch shifting, tempo değişimi, ses kırpma, normalizasyon
+- **Gelişmiş Ses İşleme**: 
+  - Pitch shifting ve tempo değişimi
+  - **🎛️ Tempo Stretch**: Perdeyi bozmadan hız değişimi (0.5x - 2.0x)
+  - **🎚️ Fade In/Out**: Başlangıç ve bitiş geçişleri (ayarlanabilir süre)
+  - **🧹 Metadata Cleaner**: Ses dosyalarından metadata temizleme
+  - Ses kırpma ve normalizasyon
+  - **⏱️ Süre Garantisi**: Trim ayarı kesinlikle korunur (tempo efektlerine rağmen)
+- **🧠 Smart Controls**: 
+  - **Otomatik süre algılama**: Dosya seçildiğinde orijinal süre otomatik tespit edilir
+  - **Akıllı tempo önerisi**: Hedef süreye göre optimal tempo hesaplanır ve önerilir
+  - **Süre tahmin sistemi**: Tempo değişikliği sonrası beklenen süre gösterilir
+  - **Çift yönlü bağlantı**: Tempo↔Süre ayarları birbirine bağlı çalışır
+  - **Hata önleme**: Kritik hatalar önceden tespit edilir ve uyarı verilir
 - **YouTube İndirme**: YouTube'dan ses indirme ve arama
-- **Metadata Temizleme**: Ses dosyalarından metadata temizleme  
 - **Modern GUI**: CustomTkinter kullanılarak Windows 11 tarzı karanlık tema
 - **Toplu İşleme**: Birden fazla dosyayı aynı anda işleme
+
+## 🛠️ Son Güncelleme: Duration Bug Fix
+
+**Problem**: Tempo değişimi efektleri kullanıldığında ses süresi beklenenin dışında çıkıyordu
+- Kullanıcı 90s ayarlıyor → Tempo %50 → Çıktı 180s oluyordu
+
+**Çözüm**: Final trim sistemi eklendi
+- Artık hangi efekt kullanılırsa kullanılsın, ayarlanan süre **kesinlikle** korunuyor
+- 90s ayarlarsanız → Her zaman 90s çıktı alırsınız
 
 ## 🚀 Kurulum ve Çalıştırma
 
@@ -79,11 +99,15 @@ Ses dosyalarını işlemek için geliştirilmiş Python GUI uygulaması.
 
 ## ⚙️ Kullanım
 
-1. **Ses Dosyası İşleme:**
+1. **Gelişmiş Ses Dosyası İşleme:**
    - "Dosya Seç" butonuna tıklayın
    - İstediğiniz ses dosyalarını seçin
-   - İşleme parametrelerini ayarlayın
-   - "İşle" butonuna tıklayın
+   - **Yeni İşleme Parametrelerini Ayarlayın:**
+     - **Tempo Stretch**: Slider ile 0.5x-2.0x hız ayarlayın (perde korunur)
+     - **Fade In**: Başlangıçta yumuşak giriş için işaretleyin + süre ayarlayın
+     - **Fade Out**: Bitişte yumuşak çıkış için işaretleyin + süre ayarlayın
+     - **Clean Metadata**: Tüm metadata'yı temizlemek için işaretleyin
+   - "🎵 Process Audio Files" butonuna tıklayın
 
 2. **YouTube'dan İndirme:**
    - "YouTube" sekmesine geçin
@@ -96,18 +120,49 @@ Ses dosyalarını işlemek için geliştirilmiş Python GUI uygulaması.
 
 3. **Metadata Temizleme:**
    - Dosyalarınızı seçin
-   - "Metadata Temizle" seçeneğini işaretleyin
+   - "Clean Metadata" seçeneğini işaretleyin
    - İşlemi başlatın
 
 ## 🔧 Yapılandırma
 
+### 📁 Çıktı Klasör Yapısı
+
+Artık işlenmiş dosyalar ve indirilen dosyalar ayrı klasörlerde saklanır:
+
+```
+output/
+├── processed/     # İşlenmiş ses dosyaları
+│   ├── song1_processed.mp3
+│   └── song2_processed.mp3
+└── downloads/     # YouTube'dan indirilen dosyalar  
+    ├── video1.mp3
+    └── video2.mp3
+```
+
+**Klasör Ayarları (config.json):**
+- `processed_output_folder`: İşlenmiş dosyalar klasörü (varsayılan: "output/processed")
+- `downloaded_output_folder`: İndirilen dosyalar klasörü (varsayılan: "output/downloads")
+
+### ⚙️ Genel Ayarlar
+
 `config.json` dosyasında aşağıdaki ayarları düzenleyebilirsiniz:
 
+**Temel İşleme:**
 - `pitch_shift`: Pitch kaydırma miktarı
 - `tempo_change`: Tempo değişimi yüzdesi
 - `trim_duration`: Kırpma süresi (saniye)
 - `normalize_volume`: Ses normalleştirme
 - `output_format`: Çıktı format (mp3, wav, etc.)
+
+**Yeni Özellikler:**
+- `tempo_stretch`: Tempo uzatma/sıkıştırma (0.5-2.0x)
+- `fade_in`: Fade-in efekti aktif/pasif
+- `fade_out`: Fade-out efekti aktif/pasif
+- `fade_in_duration`: Fade-in süresi (saniye)
+- `fade_out_duration`: Fade-out süresi (saniye)
+- `clean_metadata`: Metadata temizleme aktif/pasif
+
+**Diğer:**
 - `youtube_quality`: YouTube indirme kalitesi
 
 ## 🎵 Desteklenen Formatlar

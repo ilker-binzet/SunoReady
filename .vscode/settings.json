@@ -1,0 +1,17 @@
+{
+    "python.defaultInterpreterPath": "C:\\Python312\\python.exe",
+    "python.pythonPath": "C:\\Python312\\python.exe",
+    "python.analysis.extraPaths": [
+        "C:\\Python312\\Lib\\site-packages"
+    ],
+    "python.analysis.autoSearchPaths": true,
+    "python.analysis.typeCheckingMode": "off",
+    "python.linting.enabled": false,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.stubPath": "C:\\Python312\\Lib\\site-packages",
+    "python.envFile": "${workspaceFolder}/.env",
+    "pylance.insidersChannel": "off",
+    "python.analysis.diagnosticMode": "workspace"
+}

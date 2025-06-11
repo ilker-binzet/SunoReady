@@ -1,0 +1,23 @@
+{
+    "include": [
+        "."
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*"
+    ],
+    "extraPaths": [
+        "C:/Python312/Lib/site-packages"
+    ],
+    "pythonVersion": "3.12",
+    "pythonPlatform": "Windows",
+    "typeCheckingMode": "off",
+    "reportMissingImports": "none",
+    "reportMissingTypeStubs": false,
+    "reportIncompatibleMethodOverride": false,
+    "reportUnboundVariable": "none",
+    "reportUndefinedVariable": "none",
+    "reportGeneralTypeIssues": false,
+    "reportOptionalMemberAccess": false
+}

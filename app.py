@@ -12,38 +12,226 @@ import threading
 from pathlib import Path
 import subprocess
 import sys
+import platform
 
 from audio_utils import AudioProcessor
 from yt_downloader import YouTubeDownloader
 from metadata_utils import MetadataUtils
 
+# Fast processor import
+try:
+    from fast_processor import FastAudioProcessor
+    fast_processor_available = True
+except ImportError:
+    fast_processor_available = False
+
+# Lightning processor import
+try:
+    from lightning_processor import LightningProcessor
+    lightning_processor_available = True
+except ImportError:
+    lightning_processor_available = False
+
 # Set appearance and theme
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
+
+# Modern theme colors
+THEME_COLORS = {
+    "bg_primary": "#2C3E50",      # Dark blue-grey background
+    "bg_secondary": "#34495E",    # Slightly lighter background
+    "accent": "#FF6B35",          # Orange accent color
+    "accent_hover": "#E85A2F",    # Darker orange for hover
+    "text_primary": "#FFFFFF",    # White text
+    "text_secondary": "#BDC3C7",  # Light grey text
+    "border": "#5D6D7E",          # Border color
+    "success": "#27AE60",         # Green for success
+    "warning": "#F39C12",         # Orange for warnings
+    "error": "#E74C3C"            # Red for errors
+}
+
+def load_noto_sans_font():
+    """Load Noto Sans font from the fonts directory"""
+    try:
+        font_dir = Path("fonts/Noto_Sans")
+        
+        # Check if font directory exists
+        if not font_dir.exists():
+            print("Warning: Noto Sans font directory not found. Using system default.")
+            return "Segoe UI"
+        
+        # Try to find the regular font file
+        font_files = [
+            "NotoSans-VariableFont_wdth,wght.ttf",
+            "static/NotoSans_Condensed-Regular.ttf",
+            "static/NotoSans_ExtraCondensed-Regular.ttf"
+        ]
+        
+        for font_file in font_files:
+            font_path = font_dir / font_file
+            if font_path.exists():
+                # On Windows, we can register the font with the system temporarily
+                if platform.system() == "Windows":
+                    try:
+                        import ctypes
+                        from ctypes import wintypes
+                        
+                        # Add font resource
+                        font_resource = ctypes.windll.gdi32.AddFontResourceW(str(font_path))
+                        if font_resource:
+                            print(f"Successfully loaded Noto Sans font from: {font_path}")
+                            return "Noto Sans"
+                    except Exception as e:
+                        print(f"Could not register font: {e}")
+                        
+                # Fallback: try to use the font file directly (limited support in tkinter)
+                print(f"Found Noto Sans font at: {font_path}")
+                return str(font_path)
+        
+        print("Warning: Noto Sans font files not found. Using system default.")
+        return "Segoe UI"
+        
+    except Exception as e:
+        print(f"Error loading Noto Sans font: {e}")
+        return "Segoe UI"
+
+# Load Noto Sans font
+FONT_FAMILY = load_noto_sans_font()
 
 class SunoReadyApp:
     def __init__(self):
         self.root = ctk.CTk()
         self.root.title("SunoReady - Audio Processing Tool")
-        self.root.geometry("1000x700")
+        self.root.geometry("1002x1116")
         self.root.minsize(800, 600)
         
-        # Initialize utilities
-        self.audio_processor = AudioProcessor()
-        self.yt_downloader = YouTubeDownloader(log_callback=self.log_to_terminal)
-        self.metadata_utils = MetadataUtils(log_callback=self.log_to_terminal)
+        # Apply modern theme colors
+        self.apply_modern_theme()
         
-        # Load configuration
+        # Load configuration first
         self.config = self.load_config()
         
-        # Create output directory
-        os.makedirs("output", exist_ok=True)
+        # Initialize utilities with config
+        self.audio_processor = AudioProcessor(config=self.config)
+        
+        # Initialize lightning processor (preferred)
+        if lightning_processor_available:
+            self.lightning_processor = LightningProcessor(config=self.config)
+            self.log_to_terminal("⚡ Lightning processor ready!", "info")
+        else:
+            self.lightning_processor = None
+        
+        # Initialize fast processor if available and enabled
+        if fast_processor_available and self.config.get('use_fast_processing', True):
+            self.fast_processor = FastAudioProcessor(config=self.config)
+            self.log_to_terminal("🚀 Fast processing mode enabled", "info")
+        else:
+            self.fast_processor = None
+            if not lightning_processor_available:
+                self.log_to_terminal("🐢 Standard processing mode (librosa)", "info")
+        
+        self.yt_downloader = YouTubeDownloader(log_callback=self.log_to_terminal, config=self.config)
+        self.metadata_utils = MetadataUtils(log_callback=self.log_to_terminal)
+        
+        # Create output directories
+        os.makedirs(self.config.get('processed_output_folder', 'output/processed'), exist_ok=True)
+        os.makedirs(self.config.get('downloaded_output_folder', 'output/downloads'), exist_ok=True)
+        
+        # Check DLL performance status
+        self.check_dll_performance_status()
         
         # Initialize UI
         self.setup_ui()
         
         # Current files list
         self.selected_files = []
+    
+    def apply_modern_theme(self):
+        """Apply modern theme with custom colors and fonts"""
+        # Set window background
+        self.root.configure(fg_color=THEME_COLORS["bg_primary"])
+        
+        # Configure default fonts
+        self.font_small = ctk.CTkFont(family=FONT_FAMILY, size=10)
+        self.font_regular = ctk.CTkFont(family=FONT_FAMILY, size=12)
+        self.font_medium = ctk.CTkFont(family=FONT_FAMILY, size=14)
+        self.font_large = ctk.CTkFont(family=FONT_FAMILY, size=16)
+        self.font_title = ctk.CTkFont(family=FONT_FAMILY, size=24, weight="bold")
+        self.font_heading = ctk.CTkFont(family=FONT_FAMILY, size=18, weight="bold")
+        
+        print(f"Applied modern theme with font family: {FONT_FAMILY}")
+    
+    def create_modern_button(self, parent, text, command=None, **kwargs):
+        """Create a modern styled button with consistent theming"""
+        default_kwargs = {
+            "font": self.font_regular,
+            "corner_radius": 8,
+            "height": 36,
+            "fg_color": THEME_COLORS["accent"],
+            "hover_color": THEME_COLORS["accent_hover"],
+            "text_color": THEME_COLORS["text_primary"],
+            "border_width": 0
+        }
+        default_kwargs.update(kwargs)
+        
+        button = ctk.CTkButton(parent, text=text, command=command, **default_kwargs)
+        return button
+    
+    def create_modern_frame(self, parent, **kwargs):
+        """Create a modern styled frame with consistent theming"""
+        default_kwargs = {
+            "corner_radius": 8,
+            "fg_color": THEME_COLORS["bg_secondary"],
+            "border_width": 1,
+            "border_color": THEME_COLORS["border"]
+        }
+        default_kwargs.update(kwargs)
+        
+        frame = ctk.CTkFrame(parent, **default_kwargs)
+        return frame
+    
+    def create_modern_label(self, parent, text, **kwargs):
+        """Create a modern styled label with consistent theming"""
+        default_kwargs = {
+            "font": self.font_regular,
+            "text_color": THEME_COLORS["text_primary"]
+        }
+        default_kwargs.update(kwargs)
+        
+        label = ctk.CTkLabel(parent, text=text, **default_kwargs)
+        return label
+    
+    def create_modern_entry(self, parent, **kwargs):
+        """Create a modern styled entry with consistent theming"""
+        default_kwargs = {
+            "font": self.font_regular,
+            "corner_radius": 8,
+            "height": 36,
+            "fg_color": THEME_COLORS["bg_primary"],
+            "border_color": THEME_COLORS["border"],
+            "text_color": THEME_COLORS["text_primary"]
+        }
+        default_kwargs.update(kwargs)
+        
+        entry = ctk.CTkEntry(parent, **default_kwargs)
+        return entry
+    
+    def create_modern_combobox(self, parent, **kwargs):
+        """Create a modern styled combobox with consistent theming"""
+        default_kwargs = {
+            "font": self.font_regular,
+            "corner_radius": 8,
+            "height": 36,
+            "fg_color": THEME_COLORS["bg_primary"],
+            "border_color": THEME_COLORS["border"],
+            "text_color": THEME_COLORS["text_primary"],
+            "dropdown_fg_color": THEME_COLORS["bg_secondary"],
+            "dropdown_text_color": THEME_COLORS["text_primary"]
+        }
+        default_kwargs.update(kwargs)
+        
+        combobox = ctk.CTkComboBox(parent, **default_kwargs)
+        return combobox
         
     def load_config(self):
         """Load configuration from config.json"""
@@ -51,15 +239,14 @@ class SunoReadyApp:
             with open("config.json", "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            # Default configuration
+            # Simplified default configuration
             default_config = {
-                "pitch_shift": 0,
                 "tempo_change": 100,
-                "trim_duration": 90,
                 "normalize_volume": True,
                 "add_noise": False,
                 "apply_highpass": False,
-                "output_format": "mp3"
+                "output_format": "mp3",
+                "clean_metadata": False
             }
             self.save_config(default_config)
             return default_config
@@ -123,21 +310,31 @@ class SunoReadyApp:
     
     def setup_ui(self):
         """Setup the main user interface"""
-        # Main container
-        main_frame = ctk.CTkFrame(self.root)
-        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        # Main container with modern styling
+        main_frame = self.create_modern_frame(self.root)
+        main_frame.pack(fill="both", expand=True, padx=15, pady=15)
         
-        # Title
-        title_label = ctk.CTkLabel(
+        # Title with modern font
+        title_label = self.create_modern_label(
             main_frame, 
-            text="SunoReady Audio Processor", 
-            font=ctk.CTkFont(size=24, weight="bold")
+            text="SunoReady Audio Processor",
+            font=self.font_title
         )
-        title_label.pack(pady=(20, 30))
+        title_label.pack(pady=(25, 35))
         
-        # Create notebook for tabs
-        self.notebook = ctk.CTkTabview(main_frame)
-        self.notebook.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        # Create notebook for tabs with modern styling
+        self.notebook = ctk.CTkTabview(
+            main_frame,
+            corner_radius=8,
+            fg_color=THEME_COLORS["bg_secondary"],
+            segmented_button_fg_color=THEME_COLORS["bg_primary"],
+            segmented_button_selected_color=THEME_COLORS["accent"],
+            segmented_button_selected_hover_color=THEME_COLORS["accent_hover"],
+            text_color=THEME_COLORS["text_primary"],
+            segmented_button_unselected_color=THEME_COLORS["bg_primary"],
+            segmented_button_unselected_hover_color=THEME_COLORS["border"]
+        )
+        self.notebook.pack(fill="both", expand=True, padx=15, pady=(0, 15))
         
         # Audio Processing Tab
         self.setup_audio_tab()
@@ -152,85 +349,161 @@ class SunoReadyApp:
         """Setup audio processing tab"""
         audio_tab = self.notebook.add("Audio Processing")
         
-        # File selection section
-        file_frame = ctk.CTkFrame(audio_tab)
+        # File selection section with modern styling
+        file_frame = self.create_modern_frame(audio_tab)
         file_frame.pack(fill="x", padx=20, pady=20)
         
-        ctk.CTkLabel(file_frame, text="Audio Files", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        # Section title
+        self.create_modern_label(
+            file_frame, 
+            text="Audio Files", 
+            font=self.font_heading
+        ).pack(pady=(15, 10))
         
-        # File selection buttons
-        button_frame = ctk.CTkFrame(file_frame)
+        # File selection buttons with improved spacing
+        button_frame = ctk.CTkFrame(file_frame, fg_color="transparent")
         button_frame.pack(fill="x", padx=20, pady=10)
         
-        ctk.CTkButton(
+        self.create_modern_button(
             button_frame, 
             text="Select Files", 
             command=self.select_files,
-            width=120
-        ).pack(side="left", padx=(0, 10))
+            width=140
+        ).pack(side="left", padx=(0, 15))
         
-        ctk.CTkButton(
+        self.create_modern_button(
             button_frame, 
             text="Clear All", 
             command=self.clear_files,
-            width=120
+            width=140,
+            fg_color=THEME_COLORS["warning"],
+            hover_color="#E67E22"
         ).pack(side="left")
         
-        # Selected files display
-        self.files_text = ctk.CTkTextbox(file_frame, height=100)
+        # Selected files display with modern styling
+        self.files_text = ctk.CTkTextbox(
+            file_frame, 
+            height=100,
+            corner_radius=8,
+            font=self.font_small,
+            fg_color=THEME_COLORS["bg_primary"],
+            border_color=THEME_COLORS["border"],
+            text_color=THEME_COLORS["text_primary"]
+        )
         self.files_text.pack(fill="x", padx=20, pady=(10, 20))
         
-        # Processing options
-        options_frame = ctk.CTkFrame(audio_tab)
+        # Processing options with modern styling
+        options_frame = self.create_modern_frame(audio_tab)
         options_frame.pack(fill="x", padx=20, pady=(0, 20))
         
-        ctk.CTkLabel(options_frame, text="Processing Options", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        self.create_modern_label(
+            options_frame, 
+            text="Processing Options", 
+            font=self.font_heading
+        ).pack(pady=(15, 10))
         
-        # Options grid
-        grid_frame = ctk.CTkFrame(options_frame)
-        grid_frame.pack(fill="x", padx=20, pady=10)
+        # Tempo change as slider - main control
+        tempo_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
+        tempo_frame.pack(fill="x", padx=20, pady=20)
         
-        # Pitch shift
-        ctk.CTkLabel(grid_frame, text="Pitch Shift (semitones):").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.pitch_var = ctk.StringVar(value=str(self.config["pitch_shift"]))
-        self.pitch_entry = ctk.CTkEntry(grid_frame, textvariable=self.pitch_var, width=100)
-        self.pitch_entry.grid(row=0, column=1, padx=10, pady=5)
+        self.create_modern_label(tempo_frame, text="Tempo Change (%):").pack(anchor="w", padx=10, pady=(10, 5))
         
-        # Tempo change
-        ctk.CTkLabel(grid_frame, text="Tempo Change (%):").grid(row=0, column=2, sticky="w", padx=10, pady=5)
-        self.tempo_var = ctk.StringVar(value=str(self.config["tempo_change"]))
-        self.tempo_entry = ctk.CTkEntry(grid_frame, textvariable=self.tempo_var, width=100)
-        self.tempo_entry.grid(row=0, column=3, padx=10, pady=5)
+        # Tempo slider
+        self.tempo_var = ctk.DoubleVar(value=self.config["tempo_change"])
+        self.tempo_slider = ctk.CTkSlider(
+            tempo_frame,
+            from_=50,
+            to=200,
+            number_of_steps=150,
+            variable=self.tempo_var,
+            width=400,
+            height=25,
+            fg_color=THEME_COLORS["border"],
+            progress_color=THEME_COLORS["accent"],
+            button_color=THEME_COLORS["accent"],
+            button_hover_color=THEME_COLORS["accent_hover"]
+        )
+        self.tempo_slider.pack(padx=20, pady=(0, 5))
         
-        # Trim duration
-        ctk.CTkLabel(grid_frame, text="Trim Duration (seconds):").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        self.trim_var = ctk.StringVar(value=str(self.config["trim_duration"]))
-        self.trim_entry = ctk.CTkEntry(grid_frame, textvariable=self.trim_var, width=100)
-        self.trim_entry.grid(row=1, column=1, padx=10, pady=5)
+        # Tempo value display with duration info
+        self.tempo_value_label = self.create_modern_label(
+            tempo_frame, 
+            text=f"Current: {self.tempo_var.get():.0f}% | File duration will be adjusted based on tempo",
+            font=self.font_small,
+            text_color=THEME_COLORS["text_secondary"]
+        )
+        self.tempo_value_label.pack(anchor="w", padx=20, pady=(0, 10))
         
-        # Checkboxes
-        checkbox_frame = ctk.CTkFrame(options_frame)
-        checkbox_frame.pack(fill="x", padx=20, pady=10)
+        # Bind slider to update display
+        self.tempo_slider.configure(command=self.update_tempo_display)
+        
+        # Essential checkboxes only
+        checkbox_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
+        checkbox_frame.pack(fill="x", padx=20, pady=15)
+        
+        # Single row of essential checkboxes
+        checkbox_row = ctk.CTkFrame(checkbox_frame, fg_color="transparent")
+        checkbox_row.pack(fill="x")
         
         self.normalize_var = ctk.BooleanVar(value=self.config["normalize_volume"])
-        ctk.CTkCheckBox(checkbox_frame, text="Normalize Volume", variable=self.normalize_var).pack(side="left", padx=10)
+        normalize_cb = ctk.CTkCheckBox(
+            checkbox_row, 
+            text="Normalize Volume", 
+            variable=self.normalize_var,
+            font=self.font_regular,
+            text_color=THEME_COLORS["text_primary"],
+            fg_color=THEME_COLORS["accent"],
+            hover_color=THEME_COLORS["accent_hover"]
+        )
+        normalize_cb.pack(side="left", padx=(10, 20))
         
         self.noise_var = ctk.BooleanVar(value=self.config["add_noise"])
-        ctk.CTkCheckBox(checkbox_frame, text="Add Light Noise", variable=self.noise_var).pack(side="left", padx=10)
+        noise_cb = ctk.CTkCheckBox(
+            checkbox_row, 
+            text="Add Light Noise", 
+            variable=self.noise_var,
+            font=self.font_regular,
+            text_color=THEME_COLORS["text_primary"],
+            fg_color=THEME_COLORS["accent"],
+            hover_color=THEME_COLORS["accent_hover"]
+        )
+        noise_cb.pack(side="left", padx=20)
         
         self.highpass_var = ctk.BooleanVar(value=self.config["apply_highpass"])
-        ctk.CTkCheckBox(checkbox_frame, text="Apply Highpass Filter", variable=self.highpass_var).pack(side="left", padx=10)
+        highpass_cb = ctk.CTkCheckBox(
+            checkbox_row, 
+            text="Apply Highpass Filter", 
+            variable=self.highpass_var,
+            font=self.font_regular,
+            text_color=THEME_COLORS["text_primary"],
+            fg_color=THEME_COLORS["accent"],
+            hover_color=THEME_COLORS["accent_hover"]
+        )
+        highpass_cb.pack(side="left", padx=20)
         
-        # Process button
-        process_frame = ctk.CTkFrame(audio_tab)
-        process_frame.pack(fill="x", padx=20, pady=20)
+        self.clean_metadata_var = ctk.BooleanVar(value=self.config.get("clean_metadata", False))
+        clean_metadata_cb = ctk.CTkCheckBox(
+            checkbox_row, 
+            text="Clean Metadata", 
+            variable=self.clean_metadata_var,
+            font=self.font_regular,
+            text_color=THEME_COLORS["text_primary"],
+            fg_color=THEME_COLORS["accent"],
+            hover_color=THEME_COLORS["accent_hover"]
+        )
+        clean_metadata_cb.pack(side="left", padx=20)
         
-        self.process_btn = ctk.CTkButton(
+        # Process button with enhanced styling
+        process_frame = ctk.CTkFrame(audio_tab, fg_color="transparent")
+        process_frame.pack(fill="x", padx=20, pady=25)
+        
+        self.process_btn = self.create_modern_button(
             process_frame, 
-            text="Process Audio Files", 
+            text="🎵 Process Audio Files", 
             command=self.process_audio_files,
-            height=40,
-            font=ctk.CTkFont(size=14, weight="bold")
+            height=45,
+            font=self.font_medium,
+            width=200
         )
         self.process_btn.pack(pady=20)
     
@@ -238,8 +511,16 @@ class SunoReadyApp:
         """Setup YouTube downloader tab with sub-tabs"""
         yt_tab = self.notebook.add("YouTube Downloader")
         
-        # Create a notebook for YouTube sub-tabs
-        self.yt_notebook = ctk.CTkTabview(yt_tab)
+        # Create a notebook for YouTube sub-tabs with modern styling
+        self.yt_notebook = ctk.CTkTabview(
+            yt_tab,
+            corner_radius=8,
+            fg_color=THEME_COLORS["bg_secondary"],
+            segmented_button_fg_color=THEME_COLORS["bg_primary"],
+            segmented_button_selected_color=THEME_COLORS["accent"],
+            segmented_button_selected_hover_color=THEME_COLORS["accent_hover"],
+            text_color=THEME_COLORS["text_primary"]
+        )
         self.yt_notebook.pack(fill="both", expand=True, padx=20, pady=20)
         
         # Create Download tab
@@ -255,110 +536,118 @@ class SunoReadyApp:
         """Setup the download tab within YouTube section"""
         download_tab = self.yt_notebook.add("İndirme")
         
-        # Download section
-        download_frame = ctk.CTkFrame(download_tab)
+        # Download section with modern styling
+        download_frame = self.create_modern_frame(download_tab)
         download_frame.pack(fill="x", padx=20, pady=20)
         
-        ctk.CTkLabel(download_frame, text="YouTube Audio Downloader", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 5))
+        self.create_modern_label(
+            download_frame, 
+            text="YouTube Audio Downloader", 
+            font=self.font_heading
+        ).pack(pady=(15, 10))
         
-        # URL input
-        input_frame = ctk.CTkFrame(download_frame)
-        input_frame.pack(fill="x", padx=20, pady=10)
+        # URL input with modern styling
+        input_frame = ctk.CTkFrame(download_frame, fg_color="transparent")
+        input_frame.pack(fill="x", padx=20, pady=15)
         
-        ctk.CTkLabel(input_frame, text="YouTube URL:").pack(anchor="w", padx=10, pady=(10, 5))
+        self.create_modern_label(input_frame, text="YouTube URL:").pack(
+            anchor="w", padx=10, pady=(10, 8)
+        )
         
         # Input and paste button row
-        input_row = ctk.CTkFrame(input_frame)
-        input_row.pack(fill="x", padx=10, pady=(0, 10))
+        input_row = ctk.CTkFrame(input_frame, fg_color="transparent")
+        input_row.pack(fill="x", padx=10, pady=(0, 15))
         
-        self.yt_input = ctk.CTkEntry(input_row, placeholder_text="Paste YouTube URL here...")
-        self.yt_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.yt_input = self.create_modern_entry(
+            input_row, 
+            placeholder_text="Paste YouTube URL here...",
+            height=40
+        )
+        self.yt_input.pack(side="left", fill="x", expand=True, padx=(0, 15))
         
-        # Paste from clipboard button
-        ctk.CTkButton(
+        # Paste from clipboard button with modern styling
+        self.create_modern_button(
             input_row,
             text="📋 Paste",
             command=self.paste_from_clipboard,
-            width=80,
-            height=32,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color="#0095af",
-            hover_color="#006b66"
+            width=90,
+            height=40,
+            font=self.font_small
         ).pack(side="right")
         
-        # Quality selection
-        quality_frame = ctk.CTkFrame(input_frame)
-        quality_frame.pack(fill="x", padx=10, pady=(0, 10))
+        # Quality selection with modern styling
+        quality_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        quality_frame.pack(fill="x", padx=10, pady=(0, 15))
         
-        ctk.CTkLabel(quality_frame, text="Audio Quality (kbps):").pack(side="left", padx=(0, 10))
+        self.create_modern_label(quality_frame, text="Audio Quality (kbps):").pack(
+            side="left", padx=(0, 15)
+        )
         
         # Get default quality from config
         default_quality = self.config.get("youtube_quality", "192")
         self.quality_var = ctk.StringVar(value=default_quality)
-        self.quality_dropdown = ctk.CTkOptionMenu(
+        self.quality_dropdown = self.create_modern_combobox(
             quality_frame,
             values=["64", "128", "192", "256", "320"],
             variable=self.quality_var,
-            width=100,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            dropdown_font=ctk.CTkFont(size=11),
+            width=120,
             command=self.on_quality_change
         )
-        self.quality_dropdown.pack(side="left", padx=(0, 15))
+        self.quality_dropdown.pack(side="left", padx=(0, 20))
         
-        # Set as default checkbox
+        # Set as default checkbox with modern styling
         self.set_default_var = ctk.BooleanVar()
         self.default_checkbox = ctk.CTkCheckBox(
             quality_frame,
             text="📌 Set as Default",
             variable=self.set_default_var,
-            font=ctk.CTkFont(size=11),
-            text_color="#94a3b8",
-            hover_color="#0ea5e9",
+            font=self.font_small,
+            text_color=THEME_COLORS["text_primary"],
+            fg_color=THEME_COLORS["accent"],
+            hover_color=THEME_COLORS["accent_hover"],
             command=self.save_default_quality
         )
         self.default_checkbox.pack(side="left")
         
-        # Download button (centered)
-        button_frame = ctk.CTkFrame(download_frame)
-        button_frame.pack(fill="x", padx=20, pady=10)
+        # Download button (centered) with modern styling
+        button_frame = ctk.CTkFrame(download_frame, fg_color="transparent")
+        button_frame.pack(fill="x", padx=20, pady=15)
         
-        ctk.CTkButton(
+        self.create_modern_button(
             button_frame, 
             text="⬇️ Download Audio", 
             command=self.download_youtube,
-            width=200,
-            height=40,
-            font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#50fa7b",
-            hover_color="#6de876"
-        ).pack(pady=10)
+            width=220,
+            height=45,
+            font=self.font_medium,
+            fg_color=THEME_COLORS["success"],
+            hover_color="#229954"
+        ).pack(pady=15)
         
         # Download status section - Modern and clean design
         status_frame = ctk.CTkFrame(download_tab, fg_color="transparent")
         status_frame.pack(fill="both", expand=True, padx=20, pady=(10, 20))
         
-        # Status header with icon
-        status_header = ctk.CTkFrame(status_frame, fg_color="#2d3748", corner_radius=8)
+        # Status header with modern styling
+        status_header = self.create_modern_frame(status_frame)
         status_header.pack(fill="x", pady=(0, 10))
         
         header_content = ctk.CTkFrame(status_header, fg_color="transparent")
-        header_content.pack(fill="x", padx=15, pady=10)
+        header_content.pack(fill="x", padx=15, pady=12)
         
         # Status icon and title
-        ctk.CTkLabel(
+        self.create_modern_label(
             header_content, 
             text="📥 Download Status", 
-            font=ctk.CTkFont(size=14, weight="bold"),
-            text_color="#e2e8f0"
+            font=self.font_medium
         ).pack(side="left")
         
         # Loading animation (right side)
-        self.loading_label = ctk.CTkLabel(
+        self.loading_label = self.create_modern_label(
             header_content, 
             text="", 
-            font=ctk.CTkFont(size=11),
-            text_color="#94a3b8"
+            font=self.font_small,
+            text_color=THEME_COLORS["text_secondary"]
         )
         self.loading_label.pack(side="right")
         
@@ -394,54 +683,77 @@ class SunoReadyApp:
         """Setup the terminal tab within YouTube section"""
         terminal_tab = self.yt_notebook.add("Terminal")
         
-        # Terminal header
-        terminal_header = ctk.CTkFrame(terminal_tab, fg_color="#313244")
+        # Terminal header with modern styling
+        terminal_header = self.create_modern_frame(terminal_tab)
         terminal_header.pack(fill="x", padx=20, pady=(20, 0))
         
-        ctk.CTkLabel(
-            terminal_header, 
-            text="🖥️ yt-dlp Console", 
-            font=ctk.CTkFont(size=14, weight="bold"), 
-            text_color="#cdd6f4"
-        ).pack(side="left", padx=15, pady=10)
+        header_content = ctk.CTkFrame(terminal_header, fg_color="transparent")
+        header_content.pack(fill="x", padx=15, pady=12)
         
-        # Clear terminal button
-        ctk.CTkButton(
-            terminal_header, 
+        self.create_modern_label(
+            header_content, 
+            text="🖥️ yt-dlp Console", 
+            font=self.font_medium
+        ).pack(side="left")
+        
+        # Clear terminal button with modern styling
+        self.create_modern_button(
+            header_content, 
             text="🗑️ Clear", 
             command=self.clear_terminal,
-            width=80,
-            height=30,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color="#f38ba8",
-            hover_color="#f2d5cf"
-        ).pack(side="right", padx=15, pady=5)
+            width=90,
+            height=32,
+            font=self.font_small,
+            fg_color=THEME_COLORS["error"],
+            hover_color="#C0392B"
+        ).pack(side="right")
         
-        # Terminal console with Dracula theme colors
+        # Terminal console with modern styling
         self.terminal_text = ctk.CTkTextbox(
             terminal_tab, 
-            font=ctk.CTkFont(family="Consolas", size=11),
-            text_color="#f8f8f2",  # Dracula foreground
-            fg_color="#282a36",    # Dracula background
-            scrollbar_button_color="#44475a",  # Dracula selection
-            scrollbar_button_hover_color="#6272a4"  # Dracula comment
+            font=ctk.CTkFont(family="Consolas", size=10),
+            text_color=THEME_COLORS["text_primary"],
+            fg_color="#1E2329",  # Dark terminal background
+            corner_radius=8,
+            border_width=1,
+            border_color=THEME_COLORS["border"]
         )
-        self.terminal_text.pack(fill="both", expand=True, padx=20, pady=(5, 20))
+        self.terminal_text.pack(fill="both", expand=True, padx=20, pady=(10, 20))
         self.loading_dots = 0
     
     def setup_status_section(self, parent):
         """Setup status and progress section"""
-        status_frame = ctk.CTkFrame(parent)
+        status_frame = self.create_modern_frame(parent)
         status_frame.pack(fill="x", padx=20, pady=(0, 20))
         
-        # Progress bar
-        self.progress = ctk.CTkProgressBar(status_frame)
-        self.progress.pack(fill="x", padx=20, pady=10)
+        # Status header
+        self.create_modern_label(
+            status_frame, 
+            text="📊 Processing Status", 
+            font=self.font_medium
+        ).pack(pady=(15, 10))
+        
+        # Progress bar with modern styling
+        self.progress = ctk.CTkProgressBar(
+            status_frame,
+            corner_radius=8,
+            height=20,
+            progress_color=THEME_COLORS["accent"],
+            fg_color=THEME_COLORS["bg_primary"],
+            border_width=1,
+            border_color=THEME_COLORS["border"]
+        )
+        self.progress.pack(fill="x", padx=20, pady=(0, 15))
         self.progress.set(0)
         
-        # Status label
-        self.status_label = ctk.CTkLabel(status_frame, text="Ready", font=ctk.CTkFont(size=12))
-        self.status_label.pack(pady=(0, 10))
+        # Status label with modern styling - more visible
+        self.status_label = self.create_modern_label(
+            status_frame, 
+            text="Ready to process files", 
+            font=self.font_medium,
+            text_color=THEME_COLORS["text_primary"]  # More visible white text
+        )
+        self.status_label.pack(pady=(0, 15))
     
     def select_files(self):
         """Open file dialog to select audio files"""
@@ -461,6 +773,10 @@ class SunoReadyApp:
         if files:
             self.selected_files.extend(files)
             self.update_files_display()
+            
+            # Auto-detect duration from first file for smart controls
+            if files and hasattr(self, 'original_duration_var'):
+                self.auto_detect_duration(files[0])
     
     def clear_files(self):
         """Clear selected files"""
@@ -478,14 +794,18 @@ class SunoReadyApp:
             self.files_text.insert("1.0", "No files selected")
     
     def update_status(self, message):
-        """Update status label"""
-        self.status_label.configure(text=message)
-        self.root.update_idletasks()
+        """Update status label - thread safe"""
+        def _update():
+            self.status_label.configure(text=message)
+            self.root.update_idletasks()
+        self.root.after(0, _update)
     
     def update_progress(self, value):
-        """Update progress bar"""
-        self.progress.set(value)
-        self.root.update_idletasks()
+        """Update progress bar - thread safe"""
+        def _update():
+            self.progress.set(value)
+            self.root.update_idletasks()
+        self.root.after(0, _update)
     
 
     
@@ -512,6 +832,31 @@ class SunoReadyApp:
         # Schedule next animation frame
         self.root.after(300, lambda: self._animate_loading(base_text))
     
+    def update_tempo_stretch_label(self, value):
+        """Update tempo stretch value label when slider changes"""
+        self.tempo_stretch_value_label.configure(text=f"{value:.1f}x")
+    
+    def update_tempo_display(self, value):
+        """Update tempo display and show duration prediction"""
+        tempo_percent = value
+        self.tempo_value_label.configure(
+            text=f"Current: {tempo_percent:.0f}% | Files will be sped up/slowed down based on tempo change"
+        )
+    
+
+            
+    def toggle_lightning_mode(self):
+        """Toggle lightning processing mode"""
+        lightning_mode = self.lightning_mode_var.get()
+        
+        if lightning_mode and self.lightning_processor:
+            self.log_to_terminal("⚡ Lightning Mode activated - ultra-fast processing!", "info")
+        elif lightning_mode and not self.lightning_processor:
+            self.log_to_terminal("⚠️ Lightning processor not available, using standard mode", "warning")
+            self.lightning_mode_var.set(False)
+        else:
+            self.log_to_terminal("🐢 Lightning Mode deactivated - using slower processing", "info")
+    
     def process_audio_files(self):
         """Process selected audio files"""
         if not self.selected_files:
@@ -520,12 +865,12 @@ class SunoReadyApp:
         
         # Update config with current values
         try:
-            self.config["pitch_shift"] = float(self.pitch_var.get())
             self.config["tempo_change"] = float(self.tempo_var.get())
-            self.config["trim_duration"] = float(self.trim_var.get())
             self.config["normalize_volume"] = self.normalize_var.get()
             self.config["add_noise"] = self.noise_var.get()
             self.config["apply_highpass"] = self.highpass_var.get()
+            self.config["clean_metadata"] = self.clean_metadata_var.get()
+            
             self.save_config()
         except ValueError:
             messagebox.showerror("Invalid Input", "Please enter valid numeric values.")
@@ -543,39 +888,59 @@ class SunoReadyApp:
         """Process files in separate thread"""
         try:
             total_files = len(self.selected_files)
+            self.update_status(f"Starting to process {total_files} files...")
             
             for i, file_path in enumerate(self.selected_files):
-                self.update_status(f"Processing {os.path.basename(file_path)}...")
+                base_progress = i / total_files
+                self.update_status(f"Processing {os.path.basename(file_path)} ({i+1}/{total_files})...")
+                print(f"DEBUG: Processing file: {file_path}")
                 
-                # Process the file
-                output_path = self.audio_processor.process_audio(
-                    file_path,
-                    pitch_shift=self.config["pitch_shift"],
-                    tempo_change=self.config["tempo_change"] / 100.0,
-                    trim_duration=self.config["trim_duration"],
-                    normalize=self.config["normalize_volume"],
-                    add_noise=self.config["add_noise"],
-                    apply_highpass=self.config["apply_highpass"]
-                )
+                # Define progress callback for individual file processing
+                def file_progress_callback(sub_progress, sub_message=""):
+                    overall_progress = base_progress + (sub_progress / total_files)
+                    status_msg = f"Processing {os.path.basename(file_path)} ({i+1}/{total_files}): {sub_message}"
+                    self.update_status(status_msg)
+                    self.update_progress(overall_progress)
                 
-                # Clean metadata
-                self.metadata_utils.clean_metadata(output_path)
+                # Process the file - always use lightning-fast processing
+                if self.lightning_processor:
+                    output_path = self.lightning_processor.process_lightning_fast(
+                        file_path,
+                        progress_callback=file_progress_callback,
+                        tempo_change=self.config["tempo_change"],
+                        normalize=self.config["normalize_volume"],
+                        apply_highpass=self.config["apply_highpass"],
+                        clean_metadata=self.config["clean_metadata"]
+                    )
+                    self.log_to_terminal(f"⚡ Lightning processed: {os.path.basename(file_path)}", "info")
+                else:
+                    # Fallback to basic processing
+                    self.log_to_terminal(f"❌ Lightning processor not available", "error")
                 
-                # Update progress
+                print(f"DEBUG: Output file created: {output_path}")
+                
+                # Update progress to next file
                 progress = (i + 1) / total_files
                 self.update_progress(progress)
             
             self.update_status(f"Successfully processed {total_files} files!")
-            messagebox.showinfo("Success", f"Processed {total_files} files. Check the 'output' folder.")
+            processed_folder = self.config.get('processed_output_folder', 'output/processed')
+            messagebox.showinfo("Success", f"Processed {total_files} files. Check the '{processed_folder}' folder.")
             
         except Exception as e:
+            error_msg = f"An error occurred: {str(e)}"
+            print(f"DEBUG: Error during processing: {error_msg}")
+            import traceback
+            traceback.print_exc()
             self.update_status("Error occurred during processing")
-            messagebox.showerror("Error", f"An error occurred: {str(e)}")
-        
+            messagebox.showerror("Error", error_msg)
         finally:
-            # Re-enable process button
-            self.process_btn.configure(state="normal")
-            self.update_progress(0)
+            # Re-enable the process button - thread safe
+            def _enable_button():
+                self.process_btn.configure(state="normal")
+                self.update_progress(0)  # Reset progress bar
+                self.update_status("Ready to process files")
+            self.root.after(0, _enable_button)
     
     def download_youtube(self):
         """Download YouTube video as MP3"""
@@ -727,6 +1092,23 @@ class SunoReadyApp:
         self.log_to_terminal("=" * 50, "info")
         
         self.root.mainloop()
+
+    def check_dll_performance_status(self):
+        """Check and report DLL performance status"""
+        try:
+            from audio_processor_dll import is_dll_available, get_processor_info
+            
+            if is_dll_available():
+                self.log_to_terminal("🚀 HIGH-PERFORMANCE MODE: DLL loaded successfully!", "success")
+                self.log_to_terminal("⚡ Audio processing will be 5-20x faster", "info")
+            else:
+                self.log_to_terminal("🐍 STANDARD MODE: Using Python fallback", "warning")
+                self.log_to_terminal("💡 Compile DLL for maximum performance (setup_dll.bat)", "info")
+                
+        except ImportError:
+            self.log_to_terminal("🐍 STANDARD MODE: DLL wrapper not available", "warning")
+        except Exception as e:
+            self.log_to_terminal(f"⚠️ DLL check failed: {e}", "warning")
 
 def main():
     """Main entry point"""

@@ -10,8 +10,12 @@ import re
 from pathlib import Path
 
 class YouTubeDownloader:
-    def __init__(self, log_callback=None):
-        self.output_dir = "output"
+    def __init__(self, log_callback=None, config=None):
+        # Load config for output directory
+        if config and 'downloaded_output_folder' in config:
+            self.output_dir = config['downloaded_output_folder']
+        else:
+            self.output_dir = "output/downloads"
         os.makedirs(self.output_dir, exist_ok=True)
         self.log_callback = log_callback
     

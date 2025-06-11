@@ -31,6 +31,32 @@ if errorlevel 1 (
 )
 
 echo ✅ Bagimliliklar OK!
+
+REM Check for DLL and compile if needed
+echo 🔍 Performance DLL kontrol ediliyor...
+if exist sunoready_audio.dll (
+    echo ✅ High-performance DLL mevcut!
+    echo ⚡ Ultra-fast mode aktif olacak
+) else (
+    if exist sunoready_audio.cpp (
+        echo 🔨 DLL bulunamadi - otomatik compile ediliyor...
+        echo 💡 Bu islemi sadece bir kez yapacagiz...
+        
+        REM Try to compile DLL
+        g++ -shared -fPIC -O3 -march=native -DNDEBUG sunoready_audio.cpp -o sunoready_audio.dll -static-libgcc -static-libstdc++ >nul 2>&1
+        
+        if exist sunoready_audio.dll (
+            echo ✅ DLL basariyla compile edildi!
+            echo 🚀 High-performance mode hazir!
+        ) else (
+            echo ⚠️ DLL compile edilemedi - Python mode kullanilacak
+            echo 💡 MinGW-w64 yuklemek icin: winget install mingw-w64
+        )
+    ) else (
+        echo ⚠️ DLL source dosyasi bulunamadi - Python mode kullanilacak
+    )
+)
+
 echo 🚀 SunoReady baslatiliyor...
 echo.
 echo Terminal konsolu icin 'Show Terminal' butonunu kullanin!
