@@ -1,0 +1,112 @@
+name: ✨ Feature Request
+description: Suggest a new feature for SunoReady
+title: "[FEATURE] "
+labels: ["enhancement", "needs-review"]
+assignees:
+  - ilker-binzet
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! ✨
+        
+        **Before you submit:** Please check if there's already a similar feature request.
+
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: A clear and concise description of the feature you'd like to see.
+      placeholder: Describe the feature you want...
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem-solving
+    attributes:
+      label: Problem It Solves
+      description: What problem does this feature solve? What's the use case?
+      placeholder: Explain the problem this feature would solve...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed Solution
+      description: How do you envision this feature working?
+      placeholder: Describe how you think this feature should work...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered any alternative solutions or workarounds?
+      placeholder: Describe any alternative solutions you've thought of...
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority Level
+      description: How important is this feature to you?
+      options:
+        - Low (Nice to have)
+        - Medium (Would be helpful)
+        - High (Really need this)
+        - Critical (Blocking my workflow)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What category does this feature fall into?
+      options:
+        - UI/UX Improvement
+        - Audio Processing
+        - Performance Enhancement
+        - Suno AI Integration
+        - File Management
+        - Cross-platform Support
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: mockups
+    attributes:
+      label: Mockups/Examples
+      description: If applicable, add mockups, examples, or references to help explain your feature.
+      placeholder: |
+        You can attach images by dragging & dropping, selecting, or pasting them.
+        Include links to similar features in other apps if relevant.
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation
+      description: Are you willing to help implement this feature?
+      options:
+        - label: I'd like to implement this feature myself
+          required: false
+        - label: I can help with testing
+          required: false
+        - label: I can provide detailed requirements
+          required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched for existing feature requests
+          required: true
+        - label: This feature aligns with SunoReady's purpose
+          required: true
+        - label: I have provided enough detail for implementation
+          required: true

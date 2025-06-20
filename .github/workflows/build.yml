@@ -9,7 +9,7 @@ on:
 env:
   APP_NAME: "SunoReady"
   MAIN_SCRIPT: "run.py"
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
 
 jobs:
   create-release:
@@ -17,16 +17,14 @@ jobs:
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
       release_id: ${{ steps.create_release.outputs.id }}
-    steps:
-      - name: 📋 Create Release
+    steps:      - name: 📋 Create Release
         id: create_release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: 🎵 ${{ env.APP_NAME }} ${{ github.ref_name }}
-          body: |            ## 🎉 ${{ env.APP_NAME }} ${{ github.ref_name }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}        with:
+          tag_name: ${{ github.ref_name }}
+          name: 🎵 ${{ env.APP_NAME }} ${{ github.ref_name }}
+          body: |## 🎉 ${{ env.APP_NAME }} ${{ github.ref_name }}
             
             ### 📥 Downloads:
             - **Windows**: `${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe`
@@ -52,10 +50,12 @@ jobs:
             
             ---
             **Developer:** [Ilker Binzet](https://www.linkedin.com/in/binzet-me)  
-            **Built with:** Python ${{ env.PYTHON_VERSION }} + PyInstaller + GitHub Actions
-          draft: false
+            **Built with:** Python ${{ env.PYTHON_VERSION }} + PyInstaller + GitHub Actions          draft: false
           prerelease: false
-
+          files: |
+            dist/${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe
+            ${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg  
+            ${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
   build-windows:
     needs: create-release
     runs-on: windows-latest
@@ -64,9 +64,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: 📦 Install dependencies
         run: |
@@ -196,18 +197,12 @@ jobs:
           } else {
               Write-Host "❌ File not found: $oldName"
               Get-ChildItem dist/
-          }
-
-      - name: 📤 Upload Windows executable
-        uses: actions/upload-release-asset@v1
+          }      - name: 📤 Upload Windows executable
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./dist/${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./dist/${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe
-          asset_name: ${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe
-          asset_content_type: application/octet-stream
-
   build-macos:
     needs: create-release
     runs-on: macos-latest
@@ -216,9 +211,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: 📦 Install dependencies
         run: |
@@ -348,18 +344,12 @@ jobs:
             --hide-extension "${{ env.APP_NAME }}.app" \
             --app-drop-link 425 120 \
             "${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg" \
-            "dist/${{ env.APP_NAME }}.app"
-
-      - name: 📤 Upload macOS DMG
-        uses: actions/upload-release-asset@v1
+            "dist/${{ env.APP_NAME }}.app"      - name: 📤 Upload macOS DMG
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg
-          asset_name: ${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg
-          asset_content_type: application/octet-stream
-
   build-linux:
     needs: create-release
     runs-on: ubuntu-latest
@@ -368,9 +358,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
 
       - name: 📦 Install system dependencies
         run: |
@@ -520,17 +511,12 @@ jobs:
           chmod +x AppDir/AppRun
           
           # Create AppImage
-          ./appimagetool-x86_64.AppImage AppDir ${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
-
-      - name: 📤 Upload Linux AppImage
-        uses: actions/upload-release-asset@v1
+          ./appimagetool-x86_64.AppImage AppDir ${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage      - name: 📤 Upload Linux AppImage
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
-          asset_name: ${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
-          asset_content_type: application/octet-stream
 
   update-readme:
     needs: [create-release, build-windows, build-macos, build-linux]

@@ -1,0 +1,61 @@
+name: 📋 General Issue
+description: General questions, discussions, or other issues
+title: "[GENERAL] "
+labels: ["question", "needs-review"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reaching out! 📋
+        
+        **For bugs:** Please use the Bug Report template
+        **For features:** Please use the Feature Request template
+        
+        This template is for general questions, discussions, or other issues.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe your question or issue
+      placeholder: What would you like to discuss or ask about?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Issue Type
+      description: What type of issue is this?
+      options:
+        - Question about usage
+        - Documentation improvement
+        - Build/Installation issue
+        - Performance question
+        - Compatibility question
+        - General discussion
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any additional information that might be helpful
+      placeholder: |
+        - Your environment (OS, Python version, etc.)
+        - What you've already tried
+        - Links to relevant documentation
+        - Any other context
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Pre-submission Checklist
+      options:
+        - label: I have searched existing issues and discussions
+          required: true
+        - label: This is not a bug report or feature request
+          required: true
