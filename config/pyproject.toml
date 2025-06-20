@@ -1,0 +1,128 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sunoready"
+version = "1.0.0"
+description = "High-performance audio processing tool for Suno AI bypass and YouTube integration"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ilker Binzet", email = "contact@ilkerbinzet.dev"}
+]
+maintainers = [
+    {name = "Ilker Binzet", email = "contact@ilkerbinzet.dev"}
+]
+keywords = ["audio", "processing", "suno", "ai", "bypass", "youtube", "downloader", "music", "batch", "copyright"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Sound/Audio :: Conversion",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "customtkinter>=5.2.0",
+    "librosa>=0.10.0",
+    "soundfile>=0.12.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "mutagen>=1.47.0",
+    "yt-dlp>=2023.7.6",
+    "youtube-search-python>=1.6.6",
+    "requests>=2.31.0",
+    "ffmpeg-python>=0.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ilker-binzet/SunoReady"
+Repository = "https://github.com/ilker-binzet/SunoReady.git"
+Documentation = "https://github.com/ilker-binzet/SunoReady/wiki"
+"Bug Tracker" = "https://github.com/ilker-binzet/SunoReady/issues"
+Changelog = "https://github.com/ilker-binzet/SunoReady/releases"
+"Developer LinkedIn" = "https://www.linkedin.com/in/binzet-me"
+
+[project.scripts]
+sunoready = "run:main"
+
+[project.gui-scripts]
+sunoready-gui = "run:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "flake8>=6.0",
+    "mypy>=1.0",
+    "pre-commit>=3.0",
+]
+build = [
+    "pyinstaller>=5.13.0",
+    "cx-freeze>=6.15.0",
+    "auto-py-to-exe>=2.40.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.toml", "*.md", "*.txt", "*.yaml", "*.yml"]
+
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [".git", "__pycache__", "build", "dist", ".venv", ".eggs"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--strict-markers --strict-config --verbose"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]

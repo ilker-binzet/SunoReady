@@ -1,0 +1,16 @@
+{
+  "tempo_change": 110.0,
+  "normalize_volume": true,
+  "add_noise": true,
+  "apply_highpass": true,
+  "output_format": "mp3",
+  "default_output_quality": "320k",
+  "ui_theme": "dark",
+  "auto_clean_metadata": true,
+  "batch_processing": true,
+  "ffmpeg_path": "ffmpeg",
+  "youtube_quality": "128",
+  "clean_metadata": true,
+  "processed_output_folder": "output/processed",
+  "downloaded_output_folder": "output/downloads"
+}
