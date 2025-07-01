@@ -94,6 +94,7 @@ SunoReady - Python/
 
 - **Tempo Modification**: Subtle speed adjustments (95% - 105%) to avoid detection
 - **Pitch Shifting**: Precise pitch control with −12 to +12 semitones range for audio fingerprint modification
+- **Adjusting Pitch Shift**: Advanced pitch modification algorithms that maintain audio quality while altering characteristics
 - **Volume Normalization**: Consistent audio levels for platform compatibility
 - **Noise Injection**: Add imperceptible white noise to alter audio signature
 - **Highpass/Lowpass Filters**: Frequency adjustments to modify audio characteristics
