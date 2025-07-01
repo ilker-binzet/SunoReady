@@ -1,0 +1,228 @@
+name: 🚀 Build and Release SunoReady
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  APP_NAME: "SunoReady"
+  MAIN_SCRIPT: "run.py" 
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📋 Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: 🎵 ${{ env.APP_NAME }} ${{ github.ref_name }}
+          body: |
+            ## 🎉 ${{ env.APP_NAME }} ${{ github.ref_name }}
+            
+            ### 📥 Downloads:
+            - **Windows**: `${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe`
+            - **macOS**: `${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg`
+            - **Linux**: `${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage`
+            
+            ### ✨ Features:
+            - 🎵 High-performance audio processing for Suno AI
+            - 🔓 Copyright detection bypass capabilities
+            - 📺 YouTube audio downloader with processing
+            - 🎨 Ultra-compact UI design
+            - ⚡ Native C++ DLL acceleration (Windows)
+            - 🌍 Cross-platform compatibility
+            
+            ### 🚀 Quick Start:
+            1. Download the appropriate file for your OS
+            2. Run the executable (no installation required)
+            3. Process audio files for Suno AI upload
+            4. Bypass copyright detection effortlessly!
+            
+            ### ⚖️ Legal Notice:
+            This tool is for educational purposes. Users must comply with copyright laws.
+            
+            ---
+            **Developer:** [Ilker Binzet](https://www.linkedin.com/in/binzet-me)  
+            **Built with:** Python ${{ env.PYTHON_VERSION }} + PyInstaller + GitHub Actions
+          draft: false
+          prerelease: false
+
+  build-windows:
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 🔧 Setup MinGW for DLL compilation
+        run: |
+          choco install mingw -y
+          refreshenv
+
+      - name: 🏗️ Compile DLL
+        run: |
+          cd build
+          g++ -shared -static -fPIC -O3 -march=native -DNDEBUG sunoready_audio.cpp -o sunoready_audio.dll -static-libgcc -static-libstdc++ -lm
+          if (Test-Path "sunoready_audio.dll") { 
+            Write-Host "✅ DLL compiled successfully" 
+          } else { 
+            Write-Host "⚠️ DLL compilation failed - will use Python fallback" 
+          }
+        continue-on-error: true
+
+      - name: 🔨 Build Windows executable
+        run: |
+          pyinstaller --clean --noconfirm build/SunoReady.spec
+
+      - name: 📝 Rename executable
+        run: |
+          $version = "${{ github.ref_name }}"
+          $oldName = "dist/${{ env.APP_NAME }}.exe"
+          $newName = "dist/${{ env.APP_NAME }}-$version-windows.exe"
+          if (Test-Path $oldName) {
+              Rename-Item $oldName $newName
+              Write-Host "✅ Renamed to: $newName"
+          } else {
+              Write-Host "❌ File not found: $oldName"
+              Get-ChildItem dist/
+          }
+
+      - name: 📤 Upload Windows executable
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./dist/${{ env.APP_NAME }}-${{ github.ref_name }}-windows.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+          brew install portaudio ffmpeg
+
+      - name: 🔨 Build macOS application
+        run: |
+          pyinstaller --clean --noconfirm build/SunoReady.spec
+
+      - name: 📦 Create DMG
+        run: |
+          brew install create-dmg
+          create-dmg \
+            --volname "${{ env.APP_NAME }}" \
+            --window-pos 200 120 \
+            --window-size 600 300 \
+            --icon-size 100 \
+            --app-drop-link 425 120 \
+            "${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg" \
+            "dist/${{ env.APP_NAME }}.app"
+
+      - name: 📤 Upload macOS DMG
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./${{ env.APP_NAME }}-${{ github.ref_name }}-macos.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: 📦 Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libportaudio2 libsndfile1 ffmpeg build-essential fuse
+
+      - name: 📦 Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: 🔨 Build Linux executable
+        run: |
+          pyinstaller --clean --noconfirm build/SunoReady.spec
+
+      - name: 📦 Create AppImage
+        run: |
+          wget -O appimagetool-x86_64.AppImage https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          
+          cp dist/${{ env.APP_NAME }} AppDir/usr/bin/
+          
+          cat > AppDir/usr/share/applications/${{ env.APP_NAME }}.desktop << EOF
+          [Desktop Entry]
+          Type=Application
+          Name=${{ env.APP_NAME }}
+          Exec=${{ env.APP_NAME }}
+          Icon=${{ env.APP_NAME }}
+          Comment=High-performance audio processing tool
+          Categories=AudioVideo;Audio;
+          Terminal=false
+          EOF
+          
+          if [ -f "assets/generated-icon.png" ]; then
+            cp assets/generated-icon.png AppDir/usr/share/icons/hicolor/256x256/apps/${{ env.APP_NAME }}.png
+            cp assets/generated-icon.png AppDir/${{ env.APP_NAME }}.png
+          fi
+          
+          cat > AppDir/AppRun << 'EOF'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          exec ./usr/bin/${{ env.APP_NAME }} "$@"
+          EOF
+          chmod +x AppDir/AppRun
+          
+          ./appimagetool-x86_64.AppImage AppDir ${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
+
+      - name: 📤 Upload Linux AppImage
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./${{ env.APP_NAME }}-${{ github.ref_name }}-linux.AppImage
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
