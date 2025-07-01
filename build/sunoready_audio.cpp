@@ -66,6 +66,13 @@ extern "C" {
         double* audio_data, 
         int length
     );
+    
+    __declspec(dllexport) int dll_change_pitch(
+        double* samples, 
+        int length, 
+        int sample_rate, 
+        double semitones
+    );
 }
 
 // Fast FFT implementation (Cooley-Tukey algorithm)
@@ -254,5 +261,70 @@ double get_audio_rms(double* audio_data, int length) {
         return std::sqrt(sum / length);
     } catch (...) {
         return -1.0;
+    }
+}
+
+// Simple and robust pitch shifting using linear interpolation
+int dll_change_pitch(double* samples, int length, int sample_rate, double semitones) {
+    try {
+        // Validate inputs
+        if (samples == nullptr || length <= 0 || sample_rate <= 0) {
+            return -1;
+        }
+        
+        if (semitones == 0.0) {
+            return 0; // No change needed
+        }
+        
+        // Calculate pitch ratio from semitones
+        double pitch_ratio = std::pow(2.0, semitones / 12.0);
+        
+        // Clamp to reasonable range to prevent crashes
+        if (pitch_ratio < 0.25 || pitch_ratio > 4.0) {
+            return -2; // Pitch shift too extreme
+        }
+        
+        // Use simple linear interpolation approach (more stable)
+        std::vector<double> temp_data;
+        try {
+            temp_data.reserve(length);
+            temp_data.assign(samples, samples + length);
+        } catch (...) {
+            return -3; // Memory allocation failed
+        }
+        
+        // Apply pitch shift using resampling
+        for (int i = 0; i < length; i++) {
+            double src_index = i / pitch_ratio;
+            
+            if (src_index >= length - 1) {
+                samples[i] = 0.0; // Pad with silence
+            } else if (src_index < 0) {
+                samples[i] = 0.0; // Pad with silence
+            } else {
+                int index1 = static_cast<int>(std::floor(src_index));
+                int index2 = index1 + 1;
+                
+                // Ensure bounds safety
+                if (index1 < 0) index1 = 0;
+                if (index2 >= length) index2 = length - 1;
+                if (index1 >= length) index1 = length - 1;
+                
+                double fraction = src_index - index1;
+                
+                // Linear interpolation
+                samples[i] = temp_data[index1] * (1.0 - fraction) + temp_data[index2] * fraction;
+                
+                // Clamp output to prevent overflow
+                if (samples[i] > 1.0) samples[i] = 1.0;
+                if (samples[i] < -1.0) samples[i] = -1.0;
+            }
+        }
+        
+        return 0; // Success
+    } catch (const std::exception& e) {
+        return -4; // Standard exception
+    } catch (...) {
+        return -5; // Unknown error
     }
 }

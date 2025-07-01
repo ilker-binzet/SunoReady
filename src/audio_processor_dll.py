@@ -73,6 +73,20 @@ class AudioProcessorDLL:
             ctypes.POINTER(ctypes.c_double)
         ]
         self.dll.process_audio_fft.restype = ctypes.c_int
+        
+        # Pitch shifting function
+        try:
+            self.dll.dll_change_pitch.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_double
+            ]
+            self.dll.dll_change_pitch.restype = ctypes.c_int
+            self.pitch_shift_available = True
+        except AttributeError:
+            # Function not available in this DLL version
+            self.pitch_shift_available = False
     
     def is_available(self):
         """Check if DLL is available and working"""
@@ -275,6 +289,53 @@ def get_audio_rms(audio_data: np.ndarray) -> float:
     except Exception as e:
         return _get_audio_rms_python(audio_data)
 
+def change_pitch_dll(audio_data: np.ndarray, semitones: float, sample_rate: int = 44100) -> np.ndarray:
+    """
+    High-performance pitch shifting using DLL - NEW FUNCTION
+    
+    Args:
+        audio_data: Input audio array
+        semitones: Pitch shift in semitones (+/- 12 for octave)
+        sample_rate: Sample rate in Hz
+    
+    Returns:
+        Pitch-shifted audio array
+    """
+    # Import feature flag
+    try:
+        from .version import FEATURES
+        dll_pitch_enabled = FEATURES.get('dll_pitch_shift', False)
+    except ImportError:
+        dll_pitch_enabled = False
+    
+    # Check if DLL pitch function is available and enabled
+    if not dll_pitch_enabled or not _processor.dll_available or not getattr(_processor, 'pitch_shift_available', False):
+        return _change_pitch_python(audio_data, semitones, sample_rate)
+    
+    try:
+        # Ensure audio_data is the right type
+        audio_copy = np.array(audio_data, dtype=np.float64, copy=True)
+        length = len(audio_copy)
+        
+        # Call DLL function
+        result = _processor.dll.dll_change_pitch(
+            _processor._numpy_to_ctypes(audio_copy),
+            length,
+            ctypes.c_int(sample_rate),
+            ctypes.c_double(semitones)
+        )
+        
+        if result == 0:
+            return audio_copy
+        else:
+            # Fall back to Python if DLL fails
+            print(f"DLL pitch shift failed (error code: {result}), using Python fallback")
+            return _change_pitch_python(audio_data, semitones, sample_rate)
+            
+    except Exception as e:
+        print(f"DLL pitch shift failed: {e}, using Python fallback")
+        return _change_pitch_python(audio_data, semitones, sample_rate)
+
 # ===============================================================================
 # PYTHON FALLBACK IMPLEMENTATIONS
 # These are used when DLL is not available
@@ -315,6 +376,19 @@ def _compute_fft_python(audio_data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]
 def _get_audio_rms_python(audio_data: np.ndarray) -> float:
     """Python fallback for RMS"""
     return np.sqrt(np.mean(audio_data ** 2))
+
+def _change_pitch_python(audio_data: np.ndarray, semitones: float, sample_rate: int) -> np.ndarray:
+    """Python fallback for pitch shifting using librosa"""
+    try:
+        import librosa
+        # Use librosa's pitch shift function
+        return librosa.effects.pitch_shift(audio_data, sr=sample_rate, n_steps=semitones)
+    except ImportError:
+        print("Warning: librosa not available for pitch shifting, returning original audio")
+        return audio_data
+    except Exception as e:
+        print(f"Warning: pitch shifting failed: {e}, returning original audio")
+        return audio_data
 
 # ===============================================================================
 # UTILITY FUNCTIONS

@@ -151,6 +151,9 @@ class SunoReadyApp:
         # Initialize UI
         self.setup_ui()
         
+        # Synchronize UI with loaded configuration
+        self.sync_ui_with_config()
+        
         # Current files list
         self.selected_files = []
     
@@ -256,7 +259,8 @@ class SunoReadyApp:
                 "reduce_noise": False,
                 "apply_highpass": False,
                 "output_format": "mp3",
-                "clean_metadata": False
+                "clean_metadata": False,
+                "pitch_semitones": 0
             }
             self.save_config(default_config)
             return default_config
@@ -269,6 +273,21 @@ class SunoReadyApp:
         config_path.parent.mkdir(exist_ok=True)
         with open(config_path, "w") as f:
             json.dump(config, indent=2, fp=f)
+    
+    def sync_ui_with_config(self):
+        """Synchronize UI state with loaded configuration values"""
+        # Ensure pitch variable is set to the stored configuration value
+        if hasattr(self, 'pitch_var'):
+            self.pitch_var.set(self.config["pitch_semitones"])
+            # Update the pitch display label to reflect the loaded value
+            if hasattr(self, 'pitch_value_label'):
+                self.update_pitch_display(self.config["pitch_semitones"])
+        
+        # Also sync other UI elements that might have been initialized before config loading
+        if hasattr(self, 'tempo_var'):
+            self.tempo_var.set(self.config["tempo_change"])
+            if hasattr(self, 'tempo_value_label'):
+                self.update_tempo_display(self.config["tempo_change"])
     
     def paste_from_clipboard(self):
         """Paste text from clipboard to YouTube input field"""
@@ -477,6 +496,51 @@ class SunoReadyApp:
         
         # Bind slider to update display
         self.tempo_slider.configure(command=self.update_tempo_display)
+        
+        # Compact pitch control
+        pitch_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
+        pitch_frame.pack(fill="x", padx=12, pady=8)
+        
+        # Create a frame for the pitch label and range info
+        pitch_label_frame = ctk.CTkFrame(pitch_frame, fg_color="transparent")
+        pitch_label_frame.pack(fill="x", padx=5, pady=(5, 2))
+        
+        self.create_modern_label(pitch_label_frame, text="Pitch Shift (semitones):").pack(side="left")
+        self.create_modern_label(
+            pitch_label_frame, 
+            text="(Range: −12 … +12)", 
+            font=self.font_small,
+            text_color=THEME_COLORS["text_secondary"]
+        ).pack(side="left", padx=(5, 0))
+        
+        # Compact pitch slider
+        self.pitch_var = ctk.DoubleVar(value=self.config["pitch_semitones"])
+        self.pitch_slider = ctk.CTkSlider(
+            pitch_frame,
+            from_=-12,
+            to=12,
+            number_of_steps=24,
+            variable=self.pitch_var,
+            width=300,
+            height=20,
+            fg_color=THEME_COLORS["border"],
+            progress_color=THEME_COLORS["accent"],
+            button_color=THEME_COLORS["accent"],
+            button_hover_color=THEME_COLORS["accent_hover"]
+        )
+        self.pitch_slider.pack(padx=10, pady=(0, 2))
+        
+        # Compact pitch value display
+        self.pitch_value_label = self.create_modern_label(
+            pitch_frame, 
+            text=f"Current: {self.pitch_var.get():.0f} st",
+            font=self.font_small,
+            text_color=THEME_COLORS["text_secondary"]
+        )
+        self.pitch_value_label.pack(anchor="w", padx=10, pady=(0, 5))
+        
+        # Bind slider to update display
+        self.pitch_slider.configure(command=self.update_pitch_display)
         
         # Compact checkboxes
         checkbox_frame = ctk.CTkFrame(options_frame, fg_color="transparent")
@@ -858,6 +922,13 @@ class SunoReadyApp:
             text=f"Current: {tempo_percent:.0f}% | Files will be sped up/slowed down based on tempo change"
         )
     
+    def update_pitch_display(self, value):
+        """Update pitch display label when slider changes"""
+        pitch_semitones = value
+        self.pitch_value_label.configure(
+            text=f"Current: {pitch_semitones:.0f} st"
+        )
+    
 
             
     def toggle_lightning_mode(self):
@@ -881,6 +952,7 @@ class SunoReadyApp:
         # Update config with current values
         try:
             self.config["tempo_change"] = float(self.tempo_var.get())
+            self.config["pitch_semitones"] = float(self.pitch_var.get())
             self.config["normalize_volume"] = self.normalize_var.get()
             self.config["add_noise"] = self.noise_var.get()
             self.config["apply_highpass"] = self.highpass_var.get()
@@ -923,6 +995,7 @@ class SunoReadyApp:
                         file_path,
                         progress_callback=file_progress_callback,
                         tempo_change=self.config["tempo_change"],
+                        pitch_semitones=self.config["pitch_semitones"],
                         normalize=self.config["normalize_volume"],
                         apply_highpass=self.config["apply_highpass"],
                         clean_metadata=self.config["clean_metadata"]

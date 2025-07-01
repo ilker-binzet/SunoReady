@@ -1,5 +1,5 @@
 {
-  "tempo_change": 115.0,
+  "tempo_change": 100.0,
   "normalize_volume": true,
   "add_noise": true,
   "apply_highpass": true,
@@ -12,5 +12,6 @@
   "youtube_quality": "128",
   "clean_metadata": true,
   "processed_output_folder": "output/processed",
-  "downloaded_output_folder": "output/downloads"
+  "downloaded_output_folder": "output/downloads",
+  "pitch_semitones": 5.0
 }

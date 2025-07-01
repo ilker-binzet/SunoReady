@@ -93,7 +93,7 @@ SunoReady - Python/
 ### 🎵 Audio Processing for Suno AI
 
 - **Tempo Modification**: Subtle speed adjustments (95% - 105%) to avoid detection
-- **Pitch Shifting**: Micro-adjustments to change audio fingerprint
+- **Pitch Shifting**: Precise pitch control with −12 to +12 semitones range for audio fingerprint modification
 - **Volume Normalization**: Consistent audio levels for platform compatibility
 - **Noise Injection**: Add imperceptible white noise to alter audio signature
 - **Highpass/Lowpass Filters**: Frequency adjustments to modify audio characteristics
@@ -136,13 +136,38 @@ SunoReady - Python/
 
 ## 🎯 Usage Examples
 
+### Command Line Interface
+
+```bash
+# Show help with pitch control documentation
+python sunoready_cli.py --help
+
+# Process with pitch shift
+python sunoready_cli.py process input.mp3 --pitch 3
+
+# Batch process with multiple effects
+python sunoready_cli.py process *.mp3 --pitch -2 --tempo 105 --normalize
+
+# Show current configuration
+python sunoready_cli.py config --show
+```
+
 ### Basic Audio Processing
 
 1. **Launch**: `python run.py`
 2. **Select Files**: Click "Select Files" button
-3. **Adjust Tempo**: Use slider (50% - 200%)
+3. **Adjust Settings**:
+   - **Tempo**: Use slider (50% - 200%)
+   - **Pitch**: Adjust pitch shift (−12 to +12 semitones)
 4. **Configure Options**: Check desired enhancements
 5. **Process**: Click "🎵 Process Files"
+
+### Pitch Control Usage
+
+- **Range**: −12 to +12 semitones (2 full octaves)
+- **Subtle Changes**: ±1 to ±3 semitones for copyright bypass
+- **Creative Changes**: ±4 to ±12 semitones for artistic effects
+- **Quality**: Smaller changes maintain better audio quality
 
 ### YouTube Audio Download
 

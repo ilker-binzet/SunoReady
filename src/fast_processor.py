@@ -54,7 +54,7 @@ class FastAudioProcessor:
                 update_progress(2, 6, "Skipping tempo stretch...")
             
             # Step 2: Pitch shift (FFmpeg asetrate + atempo combination)
-            pitch_shift = options.get('pitch_shift', 0)
+            pitch_shift = options.get('pitch_shift', self.config.get('pitch_semitones', 0))
             if pitch_shift != 0:
                 update_progress(3, 6, f"Applying pitch shift ({pitch_shift:+d} semitones)...")
                 temp_pitch = tempfile.mktemp(suffix='.mp3')

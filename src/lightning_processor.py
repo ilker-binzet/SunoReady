@@ -9,6 +9,7 @@ import subprocess
 import tempfile
 import shutil
 from pathlib import Path
+from audio_utils import AudioProcessor
 
 class LightningProcessor:
     """Ultra-fast audio processor - only essential features"""
@@ -17,6 +18,8 @@ class LightningProcessor:
         self.config = config
         self.processed_output_folder = config.get("processed_output_folder", "output/processed")
         os.makedirs(self.processed_output_folder, exist_ok=True)
+        # Initialize AudioProcessor for pitch shifting
+        self.audio_processor = AudioProcessor(config)
     
     def process_lightning_fast(self, input_path, output_path=None, progress_callback=None, **options):
         """
@@ -42,6 +45,37 @@ class LightningProcessor:
             
             # Audio filters chain
             filters = []
+            
+            # Pitch shift (if needed) - Use AudioProcessor.change_pitch like standard path
+            pitch_semitones = options.get('pitch_semitones', 0)
+            temp_pitched_file = None
+            current_input = input_path
+            
+            if pitch_semitones != 0:
+                # Use AudioProcessor.change_pitch method (same as standard path)
+                try:
+                    update_progress(1.5, 3, f"Applying pitch shift ({pitch_semitones} semitones)...")
+                    
+                    # Load audio using AudioProcessor
+                    y, sr = self.audio_processor.load_audio(input_path)
+                    
+                    # Apply pitch shift using AudioProcessor.change_pitch (same as standard path)
+                    y_pitched = self.audio_processor.change_pitch(y, pitch_semitones)
+                    
+                    # Save to temporary file
+                    temp_pitched_file = tempfile.mktemp(suffix='.wav')
+                    import soundfile as sf
+                    sf.write(temp_pitched_file, y_pitched, sr)
+                    
+                    # Update input for FFmpeg chain
+                    current_input = temp_pitched_file
+                    cmd[cmd.index(input_path)] = current_input
+                    
+                except Exception as e:
+                    print(f"Warning: AudioProcessor pitch shift failed ({e}), falling back to FFmpeg")
+                    # Fallback to FFmpeg pitch shift
+                    pitch_ratio = 2 ** (pitch_semitones / 12.0)
+                    filters.append(f'asetrate=44100*{pitch_ratio},atempo={1/pitch_ratio}')
             
             # Tempo change (if needed)
             tempo_change = options.get('tempo_change', 100.0)
@@ -99,10 +133,23 @@ class LightningProcessor:
             if result.returncode != 0:
                 raise Exception(f"FFmpeg error: {result.stderr}")
             
+            # Clean up temporary pitched file if created
+            if temp_pitched_file and os.path.exists(temp_pitched_file):
+                try:
+                    os.remove(temp_pitched_file)
+                except:
+                    pass  # Ignore cleanup errors
+            
             update_progress(3, 3, "Lightning processing complete!")
             return output_path
             
         except Exception as e:
+            # Clean up temporary pitched file on error
+            if temp_pitched_file and os.path.exists(temp_pitched_file):
+                try:
+                    os.remove(temp_pitched_file)
+                except:
+                    pass  # Ignore cleanup errors
             raise Exception(f"Lightning processing failed: {str(e)}")
 
 def test_lightning_processor():

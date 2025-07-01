@@ -137,6 +137,17 @@ class AudioProcessor:
         if n_steps == 0:
             return y
         
+        # Try DLL implementation first (if available and enabled)
+        try:
+            from .audio_processor_dll import change_pitch_dll
+            return change_pitch_dll(y, n_steps, self.sample_rate)
+        except ImportError:
+            # DLL not available, fall back to librosa
+            pass
+        except Exception as e:
+            print(f"DLL pitch shift failed: {e}, falling back to librosa")
+        
+        # Fallback to librosa implementation
         if not librosa_available:
             raise ImportError("librosa is required for pitch shifting")
         

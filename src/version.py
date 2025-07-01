@@ -19,6 +19,7 @@ PYTHON_VERSION = "3.11+"
 # Feature flags
 FEATURES = {
     "dll_acceleration": True,
+    "dll_pitch_shift": True,     # DLL-accelerated pitch shifting
     "youtube_downloader": True,
     "batch_processing": True,
     "suno_bypass": True,        # Suno AI bypass capabilities
