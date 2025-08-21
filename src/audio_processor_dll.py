@@ -7,6 +7,7 @@ Uses compiled DLL for maximum performance
 import ctypes
 import numpy as np
 import os
+import platform
 from typing import Optional, Tuple
 import sys
 
@@ -18,46 +19,90 @@ class AudioProcessorDLL:
         self.dll_available = False
         self._load_dll()
     
-    def _load_dll(self):
-        """Load the compiled DLL from build directory"""
-        try:
-            # Try multiple possible DLL locations with absolute paths
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            possible_paths = [
-                os.path.join(project_root, "build", "sunoready_audio.dll"),  # Absolute path to build/
-                os.path.join("..", "build", "sunoready_audio.dll"),         # From src/ to build/
-                os.path.join("build", "sunoready_audio.dll"),               # From root to build/
-                os.path.join(os.path.dirname(__file__), "..", "build", "sunoready_audio.dll"),  # Relative from src/
-                "sunoready_audio.dll"  # Current directory (fallback)
+    def _get_library_extension(self):
+        """Get the appropriate shared library extension for current platform"""
+        system = platform.system().lower()
+        if system == "windows":
+            return ".dll"
+        elif system == "darwin":  # macOS
+            return ".dylib"
+        else:  # Linux and other Unix-like systems
+            return ".so"
+    
+    def _get_library_paths(self):
+        """Get list of possible shared library paths for current platform"""
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        extension = self._get_library_extension()
+        base_name = "sunoready_audio"
+        
+        library_name = f"{base_name}{extension}"
+        
+        # Build list of possible paths
+        possible_paths = [
+            os.path.join(project_root, "build", library_name),  # Absolute path to build/
+            os.path.join("..", "build", library_name),          # From src/ to build/
+            os.path.join("build", library_name),                # From root to build/
+            os.path.join(os.path.dirname(__file__), "..", "build", library_name),  # Relative from src/
+            library_name  # Current directory (fallback)
+        ]
+        
+        # On Linux, also try lib prefix (standard naming convention)
+        if extension == ".so":
+            lib_name = f"lib{base_name}{extension}"
+            additional_paths = [
+                os.path.join(project_root, "build", lib_name),
+                os.path.join("..", "build", lib_name),
+                os.path.join("build", lib_name),
+                os.path.join(os.path.dirname(__file__), "..", "build", lib_name),
+                lib_name
             ]
+            possible_paths.extend(additional_paths)
+        
+        return possible_paths
+    
+    def _load_dll(self):
+        """Load the compiled shared library from build directory"""
+        try:
+            system = platform.system()
+            print(f"🖥️ Detected platform: {system}")
+            
+            possible_paths = self._get_library_paths()
             
             dll_loaded = False
             for dll_path in possible_paths:
                 try:
                     abs_path = os.path.abspath(dll_path)
                     if os.path.exists(abs_path):
-                        print(f"🔍 Trying to load DLL from: {abs_path}")
+                        print(f"🔍 Trying to load shared library from: {abs_path}")
                         self.dll = ctypes.CDLL(abs_path)
                         self._setup_function_signatures()
                         self.dll_available = True
-                        print(f"✅ High-performance DLL loaded from: {abs_path}")
+                        print(f"✅ High-performance library loaded from: {abs_path}")
                         dll_loaded = True
                         break
                 except Exception as e:
-                    print(f"⚠️ Failed to load DLL from {abs_path}: {e}")
+                    print(f"⚠️ Failed to load library from {abs_path}: {e}")
                     continue
             
             if not dll_loaded:
-                print("⚠️ DLL not found in any location - falling back to Python implementation")
+                print("⚠️ Shared library not found in any location - falling back to Python implementation")
                 print("📍 Searched locations:")
                 for path in possible_paths:
                     abs_path = os.path.abspath(path)
                     exists = "✅" if os.path.exists(abs_path) else "❌"
                     print(f"   {exists} {abs_path}")
+                print(f"💡 To enable high-performance mode:")
+                extension = self._get_library_extension()
+                if system == "Windows":
+                    print(f"   - Run: scripts/compile_dll.bat")
+                elif system == "Linux":
+                    print(f"   - Compile: g++ -shared -fPIC -O3 build/sunoready_audio.cpp -o build/sunoready_audio{extension}")
+                elif system == "Darwin":  # macOS
+                    print(f"   - Compile: clang++ -shared -fPIC -O3 build/sunoready_audio.cpp -o build/sunoready_audio{extension}")
                 self.dll_available = False
                 
         except Exception as e:
-            print(f"⚠️ Failed to load DLL: {e} - using Python fallback")
+            print(f"⚠️ Failed to load shared library: {e} - using Python fallback")
             self.dll_available = False
     
     def _setup_function_signatures(self):
@@ -65,17 +110,53 @@ class AudioProcessorDLL:
         if not self.dll:
             return
             
-        # FFT function
-        self.dll.process_audio_fft.argtypes = [
-            ctypes.POINTER(ctypes.c_double),
-            ctypes.c_int,
-            ctypes.POINTER(ctypes.c_double),
-            ctypes.POINTER(ctypes.c_double)
-        ]
-        self.dll.process_audio_fft.restype = ctypes.c_int
-        
-        # Pitch shifting function
         try:
+            # FFT function
+            self.dll.process_audio_fft.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.POINTER(ctypes.c_double)
+            ]
+            self.dll.process_audio_fft.restype = ctypes.c_int
+            
+            # Highpass filter
+            self.dll.apply_highpass_filter.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.c_double,
+                ctypes.c_double
+            ]
+            self.dll.apply_highpass_filter.restype = ctypes.c_int
+            
+            # Noise reduction
+            self.dll.apply_noise_reduction.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.c_double,
+                ctypes.c_double
+            ]
+            self.dll.apply_noise_reduction.restype = ctypes.c_int
+            
+            # Normalize audio
+            self.dll.normalize_audio.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.c_double
+            ]
+            self.dll.normalize_audio.restype = ctypes.c_int
+            
+            # Tempo change
+            self.dll.apply_tempo_change.argtypes = [
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.c_int,
+                ctypes.c_double,
+                ctypes.POINTER(ctypes.c_double),
+                ctypes.POINTER(ctypes.c_int)
+            ]
+            self.dll.apply_tempo_change.restype = ctypes.c_int
+            
+            # Pitch shifting function
             self.dll.dll_change_pitch.argtypes = [
                 ctypes.POINTER(ctypes.c_double),
                 ctypes.c_int,
@@ -84,7 +165,9 @@ class AudioProcessorDLL:
             ]
             self.dll.dll_change_pitch.restype = ctypes.c_int
             self.pitch_shift_available = True
-        except AttributeError:
+            
+        except AttributeError as e:
+            print(f"⚠️ Some DLL functions not available: {e}")
             # Function not available in this DLL version
             self.pitch_shift_available = False
     
@@ -108,6 +191,90 @@ class AudioProcessorDLL:
     def _numpy_to_ctypes(self, array: np.ndarray):
         """Convert numpy array to ctypes pointer"""
         return array.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
+    
+    def apply_highpass_filter(self, audio_data: np.ndarray, cutoff_freq: float = 80, sample_rate: float = 44100) -> np.ndarray:
+        """Apply highpass filter using DLL"""
+        if not self.dll_available:
+            return None
+        
+        try:
+            audio_copy = np.array(audio_data, dtype=np.float64, copy=True)
+            length = len(audio_copy)
+            
+            result = self.dll.apply_highpass_filter(
+                self._numpy_to_ctypes(audio_copy),
+                length,
+                ctypes.c_double(cutoff_freq),
+                ctypes.c_double(sample_rate)
+            )
+            
+            return audio_copy if result == 0 else None
+        except Exception:
+            return None
+    
+    def apply_noise_reduction(self, audio_data: np.ndarray, noise_floor: float = 0.01, reduction_factor: float = 0.5) -> np.ndarray:
+        """Apply noise reduction using DLL"""
+        if not self.dll_available:
+            return None
+        
+        try:
+            audio_copy = np.array(audio_data, dtype=np.float64, copy=True)
+            length = len(audio_copy)
+            
+            result = self.dll.apply_noise_reduction(
+                self._numpy_to_ctypes(audio_copy),
+                length,
+                ctypes.c_double(noise_floor),
+                ctypes.c_double(reduction_factor)
+            )
+            
+            return audio_copy if result == 0 else None
+        except Exception:
+            return None
+    
+    def normalize_audio(self, audio_data: np.ndarray, target_db: float = -20.0) -> np.ndarray:
+        """Normalize audio using DLL"""
+        if not self.dll_available:
+            return None
+        
+        try:
+            audio_copy = np.array(audio_data, dtype=np.float64, copy=True)
+            length = len(audio_copy)
+            
+            result = self.dll.normalize_audio(
+                self._numpy_to_ctypes(audio_copy),
+                length,
+                ctypes.c_double(target_db)
+            )
+            
+            return audio_copy if result == 0 else None
+        except Exception:
+            return None
+    
+    def apply_tempo_change(self, audio_data: np.ndarray, tempo_factor: float = 1.0) -> np.ndarray:
+        """Apply tempo change using DLL"""
+        if not self.dll_available:
+            return None
+        
+        try:
+            audio_copy = np.array(audio_data, dtype=np.float64, copy=True)
+            length = len(audio_copy)
+            output_data = np.zeros(int(length * 2), dtype=np.float64)  # Allocate more space
+            output_length = ctypes.c_int(0)
+            
+            result = self.dll.apply_tempo_change(
+                self._numpy_to_ctypes(audio_copy),
+                length,
+                ctypes.c_double(tempo_factor),
+                self._numpy_to_ctypes(output_data),
+                ctypes.byref(output_length)
+            )
+            
+            if result == 0 and output_length.value > 0:
+                return output_data[:output_length.value]
+            return None
+        except Exception:
+            return None
 
 # Create global instance
 _processor = AudioProcessorDLL()

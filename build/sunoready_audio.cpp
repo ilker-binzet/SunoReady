@@ -14,47 +14,54 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// Cross-platform export macro
+#ifdef _WIN32
+    #define EXPORT __declspec(dllexport)
+#else
+    #define EXPORT __attribute__((visibility("default")))
+#endif
+
 extern "C" {
     
     // Forward declarations
     void fft(std::vector<std::complex<double>>& data, bool inverse = false);
     
-    // Export definitions for DLL
-    __declspec(dllexport) int process_audio_fft(
+    // Export definitions for shared library (cross-platform)
+    EXPORT int process_audio_fft(
         double* input_data, 
         int length, 
         double* output_real, 
         double* output_imag
     );
     
-    __declspec(dllexport) int apply_lowpass_filter(
+    EXPORT int apply_lowpass_filter(
         double* audio_data, 
         int length, 
         double cutoff_freq, 
         double sample_rate
     );
     
-    __declspec(dllexport) int apply_highpass_filter(
+    EXPORT int apply_highpass_filter(
         double* audio_data, 
         int length, 
         double cutoff_freq, 
         double sample_rate
     );
     
-    __declspec(dllexport) int apply_noise_reduction(
+    EXPORT int apply_noise_reduction(
         double* audio_data, 
         int length, 
         double noise_floor, 
         double reduction_factor
     );
     
-    __declspec(dllexport) int normalize_audio(
+    EXPORT int normalize_audio(
         double* audio_data, 
         int length, 
         double target_level
     );
     
-    __declspec(dllexport) int apply_tempo_change(
+    EXPORT int apply_tempo_change(
         double* audio_data, 
         int length, 
         double tempo_factor,
@@ -62,12 +69,12 @@ extern "C" {
         int* output_length
     );
     
-    __declspec(dllexport) double get_audio_rms(
+    EXPORT double get_audio_rms(
         double* audio_data, 
         int length
     );
     
-    __declspec(dllexport) int dll_change_pitch(
+    EXPORT int dll_change_pitch(
         double* samples, 
         int length, 
         int sample_rate, 
