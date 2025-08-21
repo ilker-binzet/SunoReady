@@ -9,6 +9,11 @@ import sys
 import json
 from pathlib import Path
 
+# Add src directory to Python path
+project_root = Path(__file__).parent
+src_path = project_root / "src"
+sys.path.insert(0, str(src_path))
+
 def create_parser():
     """Create the command line argument parser with comprehensive help text"""
     parser = argparse.ArgumentParser(
@@ -186,7 +191,7 @@ def main():
     if args.command == 'gui' or args.command is None:
         # Launch GUI
         print("🚀 Launching SunoReady GUI...")
-        from src.app import SunoReadyApp
+        from app import SunoReadyApp
         app = SunoReadyApp()
         app.run()
         
