@@ -8,6 +8,12 @@ import os
 import sys
 import platform
 
+# Add src directory to Python path
+from pathlib import Path
+project_root = Path(__file__).parent
+src_path = project_root / "src"
+sys.path.insert(0, str(src_path))
+
 def test_platform_detection():
     """Test platform detection"""
     print("🖥️ Platform Detection Test")
@@ -24,7 +30,7 @@ def test_audio_processing():
     print("=" * 30)
     
     try:
-        from src.audio_processor_dll import AudioProcessorDLL, get_processor_info
+        from audio_processor_dll import AudioProcessorDLL, get_processor_info
         import numpy as np
         
         # Create processor

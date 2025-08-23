@@ -8,8 +8,10 @@ import os
 import time
 from pathlib import Path
 
-# Add current directory to path
-sys.path.insert(0, os.getcwd())
+# Add src directory to path
+project_root = Path(__file__).parent.parent
+src_path = project_root / "src"
+sys.path.insert(0, str(src_path))
 
 def quick_performance_test():
     """Quick test to identify main bottlenecks"""
@@ -21,7 +23,8 @@ def quick_performance_test():
         import json
         
         # Load config
-        with open('config.json', 'r') as f:
+        config_path = project_root / "config" / "config.json"
+        with open(config_path, 'r') as f:
             config = json.load(f)
         
         # Initialize processor
